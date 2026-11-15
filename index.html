@@ -1,48 +1,341 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARCTIC BUSBAR AI — Прецизионная диагностика ОРУ</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #0B0D10;
-            color: #C9D1DC;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            text-align: center;
-        }
-        .container {
-            max-width: 600px;
-            padding: 40px;
-            border: 1px solid #262930;
-            background: #12151A;
-            border-radius: 4px;
-        }
-        h1 { font-size: 22px; color: #fff; margin-bottom: 10px; }
-        p { color: #8E96A4; font-size: 14px; line-height: 1.5; }
-        .badge {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 6px 12px;
-            background: rgba(16, 185, 129, 0.1);
-            color: #10B981;
-            border: 1px solid #10B981;
-            font-size: 12px;
-            font-family: monospace;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#050E1A">
+<title>ARCTIC BUSBAR AI v2.4.0-prod</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B2B4A'/%3E%3Cpath d='M18 4L8 18h7l-2 10 11-15h-7z' fill='%2338BDF8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles/industrial.css">
+<link rel="stylesheet" href="styles/auth-glass.css">
+<link rel="stylesheet" href="styles/auth-panels.css">
 </head>
-<body>
-    <div class="container">
-        <h1>ARCTIC BUSBAR AI</h1>
-        <p>Аппаратно-программный комплекс предиктивной диагностики и самовосстановления высоковольтных шинопроводов арктических подстанций (110–220 кВ).</p>
-        <div class="badge">СТАТУС: РАЗВЕРТЫВАНИЕ ПРОТОТИПА (INARCTIC)</div>
-    </div>
+<body class="locked">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-user" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 3-5 6-5s6 2 6 5"/></symbol>
+<symbol id="i-lock" viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></symbol>
+<symbol id="i-eye" viewBox="0 0 16 16"><path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/><circle cx="8" cy="8" r="2"/></symbol>
+<symbol id="i-qr" viewBox="0 0 16 16"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h2v2H9zM13 9v2M11 13h3v1"/></symbol>
+<symbol id="i-cam" viewBox="0 0 16 16"><path d="M1 4h3l1-2h6l1 2h3v9H1z"/><circle cx="8" cy="8.5" r="2.5"/></symbol>
+<symbol id="i-grid" viewBox="0 0 16 16"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></symbol>
+<symbol id="i-graph" viewBox="0 0 16 16"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="8" cy="12" r="2"/><path d="M6 4h4M5 6l2 4M11 7l-2 3"/></symbol>
+<symbol id="i-audit" viewBox="0 0 16 16"><path d="M2 3h12v10H2zM2 7h12M6 3v10"/></symbol>
+<symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1l6 2v5c0 3-3 5-6 7-3-2-6-4-6-7V3z"/></symbol>
+<symbol id="i-plug" viewBox="0 0 16 16"><path d="M6 2v4M10 2v4M4 6h8v3a4 4 0 0 1-8 0zM8 13v2"/></symbol>
+<symbol id="i-gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/></symbol>
+<symbol id="i-power" viewBox="0 0 16 16"><path d="M8 1v7M4 4a6 6 0 1 0 8 0"/></symbol>
+<symbol id="i-bug" viewBox="0 0 16 16"><path d="M5 5h6v6a3 3 0 0 1-6 0zM8 2v3M2 8h3M11 8h3"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.6 1.5 4.2 13.8h6.1L8.9 22.5 19.8 9.4h-6.4z"/></symbol>
+<symbol id="i-check" viewBox="0 0 16 16"><path d="M2.5 8.5 6 12l7.5-8"/></symbol>
+<symbol id="i-mail" viewBox="0 0 16 16"><path d="M1.5 3.5h13v9h-13zM1.5 4l6.5 5 6.5-5"/></symbol>
+<symbol id="i-copy" viewBox="0 0 16 16"><path d="M5 5h9v9H5zM11 5V2H2v9h3"/></symbol>
+<symbol id="i-key" viewBox="0 0 16 16"><circle cx="5" cy="8" r="3"/><path d="M8 8h7M12 8v3M14.5 8v2"/></symbol>
+<symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M8 4v4.2l2.8 1.8"/></symbol>
+<symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 1.8 15 14H1zM8 6.5v3.5M8 11.8v.6"/></symbol>
+</defs></svg>
+
+<template id="tplStates">
+<div data-s="loading"><i class="spin"></i><span data-i18n="st.loading">Загрузка / синхронизация…</span></div>
+<div data-s="empty"><b>∅</b><span data-i18n="st.empty">Нет записей, подходящих под фильтр</span></div>
+<div data-s="offline"><b>!</b><span data-i18n="st.offline">COM-порт оборудования offline → InARCTic Mathematical Stream Active</span></div>
+<div data-s="error"><b>×</b><span data-i18n="st.error">Критическое исключение</span><button class="btn" data-act="crash" data-i18n="st.report">Отчёт для Claude</button></div>
+</template>
+
+<!-- ============ AUTH ============ -->
+<div id="auth" class="scene" data-drawer="closed">
+<canvas id="bgCanvas" aria-hidden="true"></canvas>
+<div class="scrim" aria-hidden="true"></div>
+
+<div class="stage" id="stage"><div class="dock">
+
+<section class="card glass" id="card" aria-labelledby="authTitle">
+<header class="term">
+<span class="on"><i class="dot"></i>CORE ONLINE</span>
+<span class="path"><b>root@arctic-busbar</b>:<em>~/auth</em>$<i class="cursor"></i></span>
+<time id="authClock" class="clock" datetime="">UTC+7 00:00:00</time>
+<button type="button" class="help" id="helpBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="acctPop" title="Тестовые аккаунты">[?]</button>
+</header>
+
+<div class="pop" id="acctPop" role="menu" aria-label="Тестовые аккаунты" hidden>
+<div class="pop-h"><span>users-db.js · тестовые аккаунты</span><span>клик = автоподстановка</span></div>
+<button type="button" class="acct" role="menuitem" data-u="eng.rza" data-p="admin123"><b>Главный Инженер РЗА<small>Admin</small></b><span>eng.rza · 1073819 · Левицкий А.Р.</span><i>admin123</i></button>
+<button type="button" class="acct" role="menuitem" data-u="disp.smena" data-p="operator123"><b>Диспетчер смены<small>Operator</small></b><span>disp.smena · 1073820 · Соколов И.В.</span><i>operator123</i></button>
+<button type="button" class="acct" role="menuitem" data-u="jury.qr" data-p="jury123"><b>Эксперт Жюри<small>Observer</small></b><span>jury.qr · 1073821 · Эксперт Жюри</span><i>jury123</i></button>
+</div>
+
+<div class="brand-row">
+<span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-bolt"/></svg></span>
+<div class="brand-t"><b>ARCTIC BUSBAR AI<span class="ver">v2.4.0-prod</span></b><span>Предиктивная диагностика ошиновки ОРУ 110–220 кВ</span></div>
+</div>
+
+<form id="loginForm" class="pane" autocomplete="off" novalidate>
+<h1 id="authTitle" data-i18n="auth.title">Доступ к системе</h1>
+<label for="loginUser"><span data-i18n="auth.user">Корпоративный логин / табельный код / ФИО</span>
+<div class="fld"><svg class="ico"><use href="#i-user"/></svg><input id="loginUser" name="username" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" placeholder="eng.rza · 1073819 · Левицкий А.Р."></div></label>
+<label for="loginPass"><span data-i18n="auth.pass">Пароль</span>
+<div class="fld"><svg class="ico"><use href="#i-lock"/></svg><input id="loginPass" name="password" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" placeholder="••••••••"><button type="button" class="eye" id="eyeBtn" aria-pressed="false" aria-label="Показать / скрыть пароль"><svg class="ico"><use href="#i-eye"/></svg></button></div></label>
+<div class="msg err" id="authMsg" role="alert" hidden></div>
+<button class="go" id="loginBtn" type="submit"><span data-i18n="auth.login">ВОЙТИ В СИСТЕМУ</span><kbd>⏎</kbd></button>
+</form>
+
+<footer class="foot">
+<button type="button" class="qrbtn" id="qrBtn" aria-expanded="false" aria-controls="drawer" title="Вход по QR-коду для комиссии"><svg class="ico"><use href="#i-qr"/></svg><span>QR жюри</span></button>
+<button type="button" class="lnk" id="rcvLink" data-i18n="rcv.link">Забыли пароль?</button>
+</footer>
+
+<div class="grant" id="grant" role="status" aria-live="polite" hidden>
+<i class="chk"><svg class="ico"><use href="#i-check"/></svg></i><b>ACCESS GRANTED</b><span id="grantMsg"></span><i class="bar"></i>
+</div>
+</section>
+
+<aside class="drawer glass" id="drawer" data-tab="pc" aria-label="Подключение жюри" aria-hidden="true" inert>
+<header class="term">
+<span class="on"><i class="dot"></i>JURY ACCESS</span>
+<span class="path"><b>jury</b>:<em>~/qr</em>$</span>
+<button type="button" class="help" id="drawerClose" aria-label="Закрыть панель">[×]</button>
+</header>
+<div class="dbody">
+<div class="tabs" role="tablist"><i class="tab-ind"></i>
+<button type="button" role="tab" class="on" data-tab="pc" aria-selected="true" data-i18n="qr.pc">На ПК (QR)</button>
+<button type="button" role="tab" data-tab="phone" aria-selected="false" data-i18n="qr.phone">С телефона (ввод кода)</button>
+</div>
+<div class="tp tp-pc" role="tabpanel">
+<div class="qrbox"><canvas id="qrCanvas" data-qr data-size="244" width="244" height="244" role="img" aria-label="QR-код для входа жюри"></canvas><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><i class="scan"></i></div>
+<div class="code" data-code aria-label="Код доступа"><b></b><b></b><b></b><i>•</i><b></b><b></b><b></b></div>
+<div class="timer" title="Обновление кода"><i data-qr-timer></i></div>
+<div class="tmeta"><span>обновится через <b data-qr-sec>30 с</b></span><span title="Сколько телефонов вошло по коду или QR в этой сессии"><span data-i18n="qr.dev">Телефонов:</span> <b data-qr-devices>0</b></span></div>
+<button type="button" class="urlline" data-qr-url title="Копировать ссылку"></button>
+<button type="button" class="go alt" id="qrJury"><svg class="ico"><use href="#i-key"/></svg><span data-i18n="qr.test">Тестовый вход в режим Жюри</span></button>
+</div>
+<div class="tp tp-phone" role="tabpanel">
+<p class="dim" data-i18n="qr.enter">Введите 6-значный код с экрана ПК</p>
+<div class="otp" id="otp" role="group" aria-label="6-значный код доступа">
+<input inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" aria-label="Цифра 1"><input inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Цифра 2"><input inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Цифра 3"><input inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Цифра 4"><input inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Цифра 5"><input inputmode="numeric" pattern="[0-9]*" autocomplete="off" aria-label="Цифра 6">
+</div>
+<button type="button" class="go alt" id="camBtn"><svg class="ico"><use href="#i-cam"/></svg><span data-i18n="qr.cam">Навести камеру на QR-код</span></button>
+</div>
+<div class="msg" id="qrMsg" role="status" hidden></div>
+</div>
+</aside>
+
+</div></div>
+
+<div class="modal-wrap" id="rcvModal" hidden>
+<form class="modal glass" id="rcvForm" role="dialog" aria-modal="true" aria-labelledby="rcvTitle" autocomplete="off" novalidate>
+<header class="term">
+<span class="on warn"><i class="dot"></i>PWD RECOVERY</span>
+<span class="path"><b>root@arctic-busbar</b>:<em>~/auth/recover</em>$</span>
+<button type="button" class="help" id="rcvClose" aria-label="Закрыть">[×]</button>
+</header>
+<div class="mbody">
+<h2 id="rcvTitle" data-i18n="rcv.title">Восстановление корпоративного доступа</h2>
+<p class="dim">Запрос уйдёт администратору безопасности РЗА. Лимит: <b>1 запрос в 24 часа</b> на аккаунт.</p>
+<label for="rcvUser"><span data-i18n="rcv.field">Введите ваш логин предприятия, табельный код или ФИО</span>
+<div class="fld"><svg class="ico"><use href="#i-user"/></svg><input id="rcvUser" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="eng.rza · 1073819 · Левицкий А.Р."></div></label>
+<div class="msg" id="rcvMsg" role="alert" hidden></div>
+<div class="lim" id="rcvLimit" hidden><svg class="ico"><use href="#i-clock"/></svg><div><span>Повторный запрос возможен через</span><b class="mono" id="rcvTimer">00:00:00</b><i class="timer"><i id="rcvBar"></i></i></div></div>
+<div class="sent" id="rcvSent" hidden>
+<div class="ok-h"><svg class="ico"><use href="#i-check"/></svg><span id="rcvReq">Заявка зарегистрирована</span></div>
+<dl class="mono"><dt>Кому</dt><dd id="sentTo"></dd><dt>Тема</dt><dd id="sentSubj"></dd><dt>Текст</dt><dd id="sentBody"></dd></dl>
+<div class="row-btns"><a class="go alt" id="sentMailto" href="#"><svg class="ico"><use href="#i-mail"/></svg><span>Открыть почтовый клиент (mailto:)</span></a><button type="button" class="go alt" id="sentCopy"><svg class="ico"><use href="#i-copy"/></svg><span>Копировать письмо</span></button></div>
+</div>
+<div class="row-btns end"><button type="button" class="ghost" id="rcvBack" data-i18n="rcv.back">← Вернуться ко входу</button><button class="go" id="rcvSend" type="submit"><span data-i18n="rcv.send">Отправить запрос администратору</span></button></div>
+</div>
+</form>
+</div>
+
+<div id="cam" class="cam-ov" hidden role="dialog" aria-modal="true" aria-label="Сканер QR-кода">
+<div class="camwrap glass">
+<header class="term"><span class="on"><i class="dot"></i>CAMERA</span><span class="path"><b>scan</b>:<em>~/qr</em>$<i class="cursor"></i></span><button type="button" class="help" id="camClose" aria-label="Закрыть сканер">[×]</button></header>
+<div class="camview"><video id="camVideo" playsinline muted></video><div class="reticle"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><i class="scan"></i></div></div>
+<div class="msg info" id="camMsg">Запрос доступа к камере…</div>
+</div>
+</div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+<header id="top">
+<div class="row">
+<div class="brand">ARCTIC BUSBAR AI <small class="mono dim">v2.4.0</small></div>
+<div class="cell"><small data-i18n="t.bus">Шина, кВ</small><b id="tU">110.0</b></div>
+<div class="cell"><small data-i18n="t.cur">Ток, А</small><b id="tI">0.0</b></div>
+<div class="cell"><small data-i18n="t.temp">Стык, °C</small><b id="tT">0.0</b></div>
+<div class="cell"><small data-i18n="t.rul">RUL, мин</small><b id="tRul">—</b></div>
+<div class="cell"><small data-i18n="t.src">Питание</small><b id="tSrc">ВВОД 1</b></div>
+<div class="cell"><small id="tzLabel">UTC+7</small><b id="tClock">00:00:00</b></div>
+<div class="cell grow"><small data-i18n="t.cfg">Профиль</small><b id="cfgString" class="cfg">1073819_ru_dark_grid_utc7_anim1</b></div>
+<div class="qs">
+<select id="selLang" aria-label="Язык"><option value="ru">RU</option><option value="zh">中文</option><option value="en">EN</option><option value="kk">KK</option><option value="be">BE</option><option value="uk">UK</option></select>
+<select id="selTheme" aria-label="Тема"><option value="dark">Dark</option><option value="amber">Amber</option><option value="light">Light</option></select>
+<select id="selTz" aria-label="Часовой пояс"><option value="utc3">UTC+3</option><option value="utc7" selected>UTC+7</option><option value="utc8">UTC+8</option><option value="utc0">UTC+0</option></select>
+<button class="btn" id="btnCrash"><svg class="ico"><use href="#i-bug"/></svg><span data-i18n="cr.btn">Отчёт для Claude</span></button>
+</div>
+</div>
+<div class="row demo">
+<span data-i18n="demo.title">Панель физических испытаний (InARCTic Demo)</span>
+<button class="btn warn" id="demoHeat" data-i18n="demo.heat">Нагрев болтового стыка (прогноз 15 мин → АВР)</button>
+<button class="btn amber" id="demoSpoof" data-i18n="demo.spoof">Сбой датчика / помеха пурги (фильтр PINN)</button>
+<button class="btn danger" id="demoBlackout" data-i18n="demo.blackout">Блэкаут подстанции 0 В (LTO −55 °C + автозапуск ДГУ)</button>
+<button class="btn" id="demoReset" data-i18n="demo.reset">Сброс</button>
+</div>
+<div id="alarm" class="alarm" role="alert" hidden></div>
+<div id="linkBar" class="linkbar" data-i18n="st.offline">COM-порт оборудования offline → InARCTic Mathematical Stream Active</div>
+</header>
+
+<aside id="side">
+<div class="emp"><div class="ava" id="empAva">—</div><div class="who"><b id="empName">—</b><span class="mono dim">ID <span id="empId">—</span></span><span class="dim" id="empRole">—</span></div><span class="sess mono" title="Сессия"><i></i><span id="empSess">00:00:00</span></span></div>
+<nav>
+<button class="on" data-view="grid"><svg class="ico"><use href="#i-grid"/></svg><span data-i18n="nav.grid">Матрица датчиков</span><em id="cGrid">0</em></button>
+<button data-view="graph"><svg class="ico"><use href="#i-graph"/></svg><span data-i18n="nav.graph">Граф топологии</span><em id="cGraph">0</em></button>
+<button data-view="audit"><svg class="ico"><use href="#i-audit"/></svg><span data-i18n="nav.audit">Журнал аудита</span><em id="cAudit">0</em></button>
+<button data-view="rbac" data-perm="admin"><svg class="ico"><use href="#i-shield"/></svg><span data-i18n="nav.rbac">Права и заявки</span><em id="cPwd">0</em></button>
+<button data-view="plugins"><svg class="ico"><use href="#i-plug"/></svg><span data-i18n="nav.plugins">Плагины</span><em id="cPlug">8</em></button>
+<button data-view="settings"><svg class="ico"><use href="#i-gear"/></svg><span data-i18n="nav.settings">Настройки и кастомизация</span></button>
+</nav>
+<div class="sidefoot">
+<button class="btn" data-act="qr"><svg class="ico"><use href="#i-qr"/></svg><span data-i18n="nav.qr">QR для Жюри</span></button>
+<button class="btn danger" id="btnLogout"><svg class="ico"><use href="#i-power"/></svg><span data-i18n="nav.logout">Выйти</span></button>
+</div>
+</aside>
+
+<main id="main">
+<section class="view on" id="view-grid" data-state="ok">
+<div class="toolbar">
+<input id="gridSearch" type="search" placeholder="Название или ID датчика" data-i18n-ph="grid.search">
+<div class="seg" id="gridTags">
+<button class="btn on" data-tag="all" data-i18n="tag.all">Все</button><button class="btn" data-tag="sub" data-i18n="tag.sub">Подписанные</button><button class="btn" data-tag="temp" data-i18n="tag.temp">Температура LWIR</button><button class="btn" data-tag="current" data-i18n="tag.current">Ток МЭК 61850</button><button class="btn" data-tag="vib" data-i18n="tag.vib">Вибрация</button><button class="btn" data-tag="power" data-i18n="tag.power">Питание LTO/ДГУ</button><button class="btn" data-tag="anomaly" data-i18n="tag.anomaly">Требуют внимания</button>
+</div>
+</div>
+<div class="states" data-for="grid"></div>
+<div class="content tiles">
+<article class="tile" data-id="MLX90614-IR-01" data-tag="temp"><header><b>MLX90614-IR-01</b><span class="badge ok" data-pinn>KIRCHHOFF OK</span></header><p class="dim" data-i18n="s.mlx">ИК-температура болтового стыка (LWIR), R<sub>k</sub>, усилие затяжки</p><div class="readouts"><div><span class="v" data-f="temp">0.0</span><u>°C</u></div><div><span class="v" data-f="rk">0.0</span><u>µΩ</u></div><div><span class="v" data-f="force">0.0</span><u>kN</u></div></div><canvas class="spark" width="280" height="44" data-thr="85"></canvas><p class="fx mono">R<sub>k</sub> = ΔP / I² <span class="thr">уставка 85 °C</span></p><footer><label class="sw"><input type="checkbox" data-sub checked><span data-i18n="sub.on">Подписан</span></label><button class="btn" data-act="calib" data-i18n="calib">Калибровка уставки</button></footer></article>
+<article class="tile" data-id="INA219-CUR-01" data-tag="current"><header><b>INA219-CUR-01</b><span class="badge ok" data-pinn>KIRCHHOFF OK</span></header><p class="dim" data-i18n="s.ina">Ток и напряжение (110 кВ в масштабе / 12 В стенд), оптический RX-only отвод IEC 61850</p><div class="readouts"><div><span class="v" data-f="cur">0.0</span><u>A</u></div><div><span class="v" data-f="volt">0.0</span><u>kV</u></div><div><span class="v" data-f="pwr">0.0</span><u>MVA</u></div></div><canvas class="spark" width="280" height="44" data-thr="1250"></canvas><p class="fx mono">S = √3 · U · I <span class="thr">уставка 1250 A</span></p><footer><label class="sw"><input type="checkbox" data-sub checked><span data-i18n="sub.on">Подписан</span></label><button class="btn" data-act="calib" data-i18n="calib">Калибровка уставки</button></footer></article>
+<article class="tile" data-id="MPU6050-VIB-01" data-tag="vib"><header><b>MPU6050-VIB-01</b><span class="badge ok" data-pinn>KIRCHHOFF OK</span></header><p class="dim" data-i18n="s.mpu">Виброспектр (Гц / g): галопирование проводов при гололёде и ветре</p><div class="readouts"><div><span class="v" data-f="freq">0.0</span><u>Hz</u></div><div><span class="v" data-f="acc">0.00</span><u>g</u></div><div><span class="v" data-f="gal">НОРМА</span></div></div><canvas class="spark" width="280" height="44" data-thr="0.8"></canvas><p class="fx mono">a<sub>rms</sub> = √⟨a²⟩ <span class="thr">уставка 0.80 g</span></p><footer><label class="sw"><input type="checkbox" data-sub checked><span data-i18n="sub.on">Подписан</span></label><button class="btn" data-act="calib" data-i18n="calib">Калибровка уставки</button></footer></article>
+<article class="tile" data-id="LTO-BAT-BUF" data-tag="power"><header><b>LTO-BAT-BUF</b><span class="badge ok" data-pinn>KIRCHHOFF OK</span></header><p class="dim" data-i18n="s.lto">Питание 220 В DC, титанат-литиевый буфер (−55 °C), сухой контакт запуска ДГУ</p><div class="readouts"><div><span class="v" data-f="vdc">220.0</span><u>V DC</u></div><div><span class="v" data-f="soc">100</span><u>% LTO</u></div><div><span class="v" data-f="dgu">ОЖИДАНИЕ</span><u>ДГУ</u></div></div><canvas class="spark" width="280" height="44" data-thr="198"></canvas><p class="fx mono">U<sub>dc</sub> = E − I · R<sub>int</sub> <span class="thr">минимум 198 V</span></p><footer><label class="sw"><input type="checkbox" data-sub checked><span data-i18n="sub.on">Подписан</span></label><button class="btn" data-act="calib" data-i18n="calib">Калибровка уставки</button></footer></article>
+</div>
+</section>
+
+<section class="view" id="view-graph" data-state="ok">
+<div class="states" data-for="graph"></div>
+<div class="content canvaswrap">
+<canvas id="graphCanvas"></canvas>
+<div class="hud">
+<input id="gSearch" type="search" placeholder="Поиск узла" data-i18n-ph="g.search">
+<label><span data-i18n="g.rep">Отталкивание узлов</span><input id="gRep" type="range" min="0" max="100" value="55"></label>
+<label><span data-i18n="g.len">Длина связей</span><input id="gLen" type="range" min="40" max="240" value="120"></label>
+<label><span data-i18n="g.flow">Скорость потока</span><input id="gFlow" type="range" min="0" max="100" value="50"></label>
+<label class="sw"><input id="gShowS" type="checkbox" checked><span data-i18n="g.sens">Сенсоры</span></label>
+<label class="sw"><input id="gShowR" type="checkbox" checked><span data-i18n="g.res">Резервные линии</span></label>
+<label class="sw"><input id="gShowF" type="checkbox" checked><span data-i18n="g.fx">Подписи формул</span></label>
+<div class="row gap"><button class="btn" id="gFit" data-i18n="g.fit">Вписать в экран</button><button class="btn" id="gPin" data-i18n="g.pin">Закрепить все</button></div>
+</div>
+<canvas id="miniMap" width="170" height="116"></canvas>
+</div>
+</section>
+
+<section class="view" id="view-audit" data-state="ok">
+<div class="toolbar">
+<div class="seg" id="auditPeriod"><button class="btn on" data-p="24h" data-i18n="a.24h">24 часа</button><button class="btn" data-p="30d" data-i18n="a.30d">30 дней</button><button class="btn" data-p="all" data-i18n="a.all">За всё время</button><button class="btn" data-p="custom" data-i18n="a.custom">Свой период</button></div>
+<input id="auditFrom" type="datetime-local"><span>–</span><input id="auditTo" type="datetime-local">
+<select id="auditUser"><option value="" data-i18n="a.allUsers">Все сотрудники</option></select>
+<select id="auditType"><option value="" data-i18n="a.allTypes">Все события</option><option>AUTH</option><option>PWD_RESET</option><option>RELAY</option><option>THRESHOLD</option><option>RBAC</option><option>PLUGIN</option><option>PINN</option><option>CONFIG</option><option>ROLLBACK</option></select>
+<button class="btn" id="auditCsv">.CSV / Excel</button>
+<button class="btn" id="auditBackup" data-i18n="set.backup">Бэкап .json / .db</button>
+<button class="btn" id="auditRestore" data-i18n="set.restore">Восстановить из бэкапа</button>
+</div>
+<div class="states" data-for="audit"></div>
+<div class="content xlwrap"><table class="xl" id="auditTable">
+<thead><tr><th data-sort="tx">TX_ID</th><th data-sort="ts" data-i18n="a.time">Дата/Время</th><th data-sort="user" data-i18n="a.user">Сотрудник</th><th data-sort="role" data-i18n="a.role">Роль</th><th data-sort="cat" data-i18n="a.cat">Категория</th><th data-sort="node" data-i18n="a.node">Узел/Объект</th><th data-sort="old" data-i18n="a.old">Старое значение</th><th data-sort="new" data-i18n="a.new">Новое значение</th><th data-i18n="a.act">Действие</th></tr></thead>
+<tbody id="auditBody"></tbody></table></div>
+</section>
+
+<section class="view" id="view-rbac" data-state="ok">
+<div class="states" data-for="rbac"></div>
+<div class="content">
+<h2 data-i18n="rb.perm">Матрица прав доступа (users-db.js)</h2>
+<div class="xlwrap"><table class="xl" id="rbacTable"><thead><tr><th>UserID</th><th>Login</th><th data-i18n="a.user">Сотрудник</th><th data-i18n="a.role">Роль</th><th>CAN_SWITCH_RELAY</th><th>CAN_EDIT_PINN</th><th>CAN_ROLLBACK_LOGS</th><th>CAN_MANAGE_PLUGINS</th></tr></thead><tbody id="rbacBody"></tbody></table></div>
+<h2 data-i18n="rb.pwd">Заявки на смену пароля</h2>
+<div class="xlwrap"><table class="xl" id="pwdTable"><thead><tr><th>REQ_ID</th><th data-i18n="a.time">Дата/Время</th><th data-i18n="a.user">Сотрудник</th><th data-i18n="rb.code">Табельный код</th><th data-i18n="rb.text">Текст заявки</th><th data-i18n="rb.status">Статус</th><th data-i18n="a.act">Действие</th></tr></thead><tbody id="pwdBody"></tbody></table></div>
+</div>
+</section>
+
+<section class="view" id="view-plugins" data-state="ok">
+<div class="toolbar"><button class="btn primary" id="btnAddPlugin" data-i18n="p.add">Написать плагин (JS / Python)</button><button class="btn" id="btnUpdate" data-i18n="set.upd">Проверить обновления</button><span id="updMsg" class="mono dim">ARCTIC BUSBAR AI v2.4.0-prod</span></div>
+<div class="states" data-for="plugins"></div>
+<div class="content xlwrap"><table class="xl" id="pluginTable">
+<thead><tr><th data-i18n="p.cat">Категория</th><th>ID</th><th data-i18n="p.ver">Версия</th><th data-i18n="p.lat">Задержка, мс</th><th data-i18n="p.par">Параметры</th><th data-i18n="p.on">Вкл.</th></tr></thead>
+<tbody>
+<tr data-plugin="IEC61850-RX-TAP"><td data-i18n="p.c1">Связь МЭК 61850</td><td>IEC61850-RX-TAP</td><td>1.3.0</td><td class="num" data-lat>4</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox" checked></td></tr>
+<tr data-plugin="PINN-KIRCHHOFF-GUARD"><td data-i18n="p.c2">Физика PINN</td><td>PINN-KIRCHHOFF-GUARD</td><td>2.4.0</td><td class="num" data-lat>12</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox" checked></td></tr>
+<tr data-plugin="LWIR-BLIZZARD-FILTER"><td data-i18n="p.c3">Оптическая очистка LWIR от пурги</td><td>LWIR-BLIZZARD-FILTER</td><td>1.1.2</td><td class="num" data-lat>8</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox" checked></td></tr>
+<tr data-plugin="LTO-DGU-STARTER"><td data-i18n="p.c4">Аварийная автоматика LTO/ДГУ</td><td>LTO-DGU-STARTER</td><td>1.5.0</td><td class="num" data-lat>3</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox" checked></td></tr>
+<tr data-plugin="EXPORT-XLSX-PDF"><td data-i18n="p.c5">Экспорт в Excel/PDF</td><td>EXPORT-XLSX-PDF</td><td>1.0.4</td><td class="num" data-lat>21</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox" checked></td></tr>
+<tr data-plugin="VOICE-ALARM-TTS"><td data-i18n="p.c6">Голосовой синтезатор тревог диспетчера</td><td>VOICE-ALARM-TTS</td><td>0.9.1</td><td class="num" data-lat>35</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox"></td></tr>
+<tr data-plugin="TG-WEBHOOK-GATE"><td data-i18n="p.c7">Telegram / Webhook-шлюз</td><td>TG-WEBHOOK-GATE</td><td>1.2.0</td><td class="num" data-lat>120</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox"></td></tr>
+<tr data-plugin="NANOCAD-PASSPORT"><td data-i18n="p.c8">Интеграция с nanoCAD / цифровым паспортом подстанции</td><td>NANOCAD-PASSPORT</td><td>0.8.0</td><td class="num" data-lat>48</td><td><button class="btn" data-act="params">⚙</button></td><td><input type="checkbox"></td></tr>
+</tbody></table></div>
+</section>
+
+<section class="view" id="view-settings" data-state="ok">
+<div class="states" data-for="settings"></div>
+<div class="content setv">
+<fieldset><legend data-i18n="set.lang">Язык интерфейса</legend><div class="seg" data-set="lang"><button class="btn on" data-val="ru">Русский</button><button class="btn" data-val="zh">中文</button><button class="btn" data-val="en">English</button><button class="btn" data-val="kk">Қазақша</button><button class="btn" data-val="be">Беларуская</button><button class="btn" data-val="uk">Українська</button></div></fieldset>
+<fieldset><legend data-i18n="set.theme">Тема оформления</legend><div class="seg" data-set="theme"><button class="btn on" data-val="dark" data-i18n="th.dark">Dark Industrial</button><button class="btn" data-val="amber" data-i18n="th.amber">High-Contrast Amber/Black</button><button class="btn" data-val="light" data-i18n="th.light">Light Engineering Schematic</button></div></fieldset>
+<fieldset><legend data-i18n="set.tz">Часовой пояс</legend><div class="seg" data-set="tz"><button class="btn" data-val="utc3">UTC+3 Москва</button><button class="btn on" data-val="utc7">UTC+7 Норильск</button><button class="btn" data-val="utc8">UTC+8 Пекин</button><button class="btn" data-val="utc0">UTC+0</button></div></fieldset>
+<fieldset><legend data-i18n="set.env">Среда</legend>
+<label class="sw"><input id="inpAccent" type="color" value="#3b82f6"><span data-i18n="set.accent">Акцентный цвет</span></label>
+<label class="sw"><input id="chkAnim" type="checkbox" checked><span data-i18n="set.anim">Анимации и параллакс (снимите для режима энергосбережения)</span></label></fieldset>
+<fieldset><legend data-i18n="set.db">База данных</legend><div class="row gap"><button class="btn" id="btnBackup" data-i18n="set.backup">Создать бэкап .json / .db</button><button class="btn" id="btnRestore" data-i18n="set.restore">Восстановить из бэкапа</button></div></fieldset>
+</div>
+</section>
+</main>
+
+<aside id="insp">
+<header><b data-i18n="insp.title">Инспектор</b><button class="btn" id="inspClose" aria-label="Закрыть">×</button></header>
+<div id="inspBody"><p class="dim" data-i18n="insp.empty">Выберите узел графа или карточку датчика</p></div>
+</aside>
+</div>
+
+<!-- MODALS -->
+<div id="mQr" class="overlay" hidden><div class="box"><header class="mh"><b data-i18n="qr.title">Подключение жюри</b><button class="btn" data-close>×</button></header>
+<div class="qrbox"><canvas data-qr data-size="244" width="244" height="244" role="img" aria-label="QR-код для входа жюри"></canvas><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i></div>
+<div class="code" data-code><b></b><b></b><b></b><i>•</i><b></b><b></b><b></b></div>
+<div class="timer"><i data-qr-timer></i></div><button type="button" class="urlline" data-qr-url title="Копировать ссылку"></button>
+<div><span class="dim" data-i18n="qr.dev">Подключено телефонов:</span> <b class="mono" data-qr-devices>0</b></div></div></div>
+
+<div id="mCrash" class="overlay" hidden><div class="box wide"><header class="mh"><b class="crit" data-i18n="cr.title">Критическое исключение: диагностика</b><button class="btn" data-close>×</button></header>
+<div class="dim" data-i18n="cr.cfg">Активный профиль</div><code id="crashCfg"></code>
+<div class="dim">Stack trace</div><pre id="crashStack"></pre>
+<div class="dim" data-i18n="cr.pk">Последние 5 пакетов телеметрии</div><pre id="crashPackets"></pre>
+<div class="row gap"><button class="btn primary" id="crashCopy" data-i18n="cr.copy">Скопировать промт ошибки для Claude</button><button class="btn" data-close data-i18n="cr.close">Закрыть</button></div></div></div>
+
+<div id="mPlugin" class="overlay" hidden><div class="box wide"><header class="mh"><b data-i18n="p.new">Редактор плагина</b><button class="btn" data-close>×</button></header>
+<label><span data-i18n="p.name">Идентификатор</span><input id="plName" placeholder="CUSTOM-PLUGIN-01"></label>
+<label><span data-i18n="p.lang">Язык</span><select id="plLang"><option value="js">JavaScript (браузер)</option><option value="py">Python (Phase 2, FastAPI)</option></select></label>
+<label><span data-i18n="p.params">Параметры (JSON)</span><textarea id="plParams" rows="3" spellcheck="false">{"threshold": 85, "enabled": true}</textarea></label>
+<label><span data-i18n="p.code">Код</span><textarea id="plCode" rows="8" spellcheck="false">// ctx.packet: {temp, cur, volt, vib, vdc}; вернуть {alarm: boolean}
+return { alarm: ctx.packet.temp > ctx.params.threshold };</textarea></label>
+<div class="row gap"><button class="btn primary" id="plSave" data-i18n="p.save">Внедрить</button><button class="btn" data-close data-i18n="cr.close">Закрыть</button></div></div></div>
+
+<input id="fileRestore" type="file" accept=".json,.db,.sql" hidden>
+
+<!-- ============ СКРИПТЫ ============ Порядок важен. users-db.js — первым (данные, без UI). -->
+<script src="scripts/users-db.js"></script>
+<script src="scripts/qr-encoder.js"></script>
+<script src="scripts/qr-jury.js"></script>
+<script src="scripts/frost-scene.js"></script>
+<script src="scripts/frost-drops.js"></script>
+<script src="scripts/frost-canvas.js"></script>
+<script src="scripts/auth.js"></script>
+<script src="scripts/app-shell.js"></script>
+<!-- ЭТАП 2+ (ещё не написаны — раскомментировать по мере появления файлов, иначе будут 404):
+<script src="scripts/i18n.js"></script>
+<script src="scripts/store.js"></script>
+<script src="scripts/pinn-simulator.js"></script>
+<script src="scripts/obsidian-graph.js"></script>
+<script src="scripts/scada-ui.js"></script>
+-->
 </body>
 </html>
