@@ -60,7 +60,7 @@ async function mk(browser, opts) { const ctx = await browser.newContext(opts); c
   await page.goto(URL); await sleep(1000); await page.fill('#loginUser', 'eng.rza'); await page.fill('#loginPass', 'admin123'); await page.tap('#loginBtn');
   await page.waitForFunction(() => !document.body.classList.contains('locked')); await sleep(800);
   const sw = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); ok(sw[0] === sw[1] && sw[1] === 390, 'ширина страницы = 390 (без раздувания viewport)', JSON.stringify(sw));
-  await page.tap('#btnLogout'); await sleep(700); ok(await page.evaluate(() => document.body.classList.contains('locked')), 'выход с телефона возвращает экран входа');
+  await page.tap('#btnProfileM'); await sleep(600); await page.tap('#btnLogout'); await sleep(700); ok(await page.evaluate(() => document.body.classList.contains('locked')), 'выход с телефона возвращает экран входа');
   const sw2 = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]); ok(sw2[0] === sw2[1], 'после выхода ширина снова 390', JSON.stringify(sw2));
   ok(logs.length === 0, 'консоль чистая (мобильный #app)', logs.join(' | ')); await ctx.close();
 
@@ -71,7 +71,7 @@ async function mk(browser, opts) { const ctx = await browser.newContext(opts); c
   await page.keyboard.type('eng.rza'); await page.keyboard.press('Enter'); await sleep(200);
   ok(await page.evaluate(() => document.activeElement.id === 'loginPass'), 'Enter в логине переводит фокус на пароль');
   await page.keyboard.type('admin123'); await page.keyboard.press('Enter'); await page.waitForFunction(() => !document.body.classList.contains('locked'), null, { timeout: 6000 }); ok(true, 'Enter в пароле — вход с клавиатуры');
-  await page.click('#btnLogout'); await sleep(600);
+  await page.click('#btnProfile'); await sleep(600); await page.click('#btnLogout'); await sleep(600);
   ok(await page.evaluate(() => document.activeElement && document.activeElement.id === 'loginUser'), 'после выхода фокус возвращается на логин');
   ok(logs.length === 0, 'консоль чистая (клавиатура)', logs.join(' | ')); await ctx.close();
 

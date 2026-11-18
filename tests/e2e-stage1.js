@@ -1,5 +1,5 @@
 /* ARCTIC BUSBAR AI v2.4.0-prod: tests/e2e-stage1.js
-   Основной интерактивный набор ЭТАПА 1 (94 проверки): часы, [?], глазок, ошибки, 3 входа, выход, восстановление 24 ч, QR-панель, PIN-ячейки, ссылка, мобильный, reduced-motion.
+   Основной интерактивный набор ЭТАПА 1 (94 проверки; адаптирован под структуру этапа 2): часы, [?], глазок, ошибки, 3 входа, выход, восстановление 24 ч, QR-панель, PIN-ячейки, ссылка, мобильный, reduced-motion.
    Запуск (из корня проекта):
      python3 -m http.server 8765 --bind 127.0.0.1 &            # сервер статики
      NODE_PATH=$(npm root -g) node tests/e2e-stage1.js                  # нужен playwright (npm i -g playwright) и Chromium
@@ -25,6 +25,17 @@ const locked = page => page.evaluate(() => document.body.classList.contains('loc
 async function login(page, u, p) {
   await page.fill('#loginUser', u); await page.fill('#loginPass', p); await page.click('#loginBtn');
 }
+async function openProfile(page) {                                  /* этап 2: выход и профиль живут в окне «Профиль» (кнопка в Ribbon / в шапке на телефоне) */
+  const open = await page.evaluate(() => { const w = document.getElementById('mProfile'); return !!w && !w.hidden && w.dataset.open === '1'; });
+  if (open) return;
+  const mobile = await page.evaluate(() => innerWidth <= 820);
+  await page.click(mobile ? '#btnProfileM' : '#btnProfile'); await sleep(500);
+}
+async function doLogout(page) {                                       /* «Выйти из аккаунта» лежит на вкладке «Профиль и вход по QR» */
+  await openProfile(page);
+  if (!(await page.isVisible('#btnLogout'))) { await page.click('#mProfile .wnd-tab[data-tab="id"]'); await sleep(350); }
+  await page.click('#btnLogout');
+}
 async function waitApp(page) { await page.waitForFunction(() => !document.body.classList.contains('locked'), null, { timeout: 6000 }); }
 
 (async () => {
@@ -43,7 +54,7 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   ok(c2.slice(6, 11) === exp, 'часы показывают время UTC+7', c2 + ' vs ' + exp);
   const st = await page.evaluate(() => FrostCanvas.stats());
   ok(st.running && st.drops > 50, 'FrostCanvas работает, капли есть', JSON.stringify(st));
-  ok(await page.evaluate(() => !window.I18N && !window.Store && !window.PINN), 'скрипты этапа 2 не подключены (закомментированы)');
+  ok(await page.evaluate(() => !!window.I18N && !!window.Store && !!window.PINN && !!window.ScadaUI && !!window.AppShell), 'скрипты этапа 2 подключены (I18N, Store, PINN, ScadaUI, AppShell)');
 
   /* ============ 2. [?] меню ============ */
   console.log('\n[2] Меню [?]');
@@ -95,7 +106,7 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
     ok(prof[0] === fio && prof[1] === id && prof[2].indexOf(role) === 0, 'профиль в #app: ' + fio + ' / ' + id + ' / ' + prof[2], JSON.stringify(prof));
     ok(prof[3] !== 'none' && /^\d\d:\d\d:\d\d$/.test(prof[4]) && prof[5] === 'UTC+7', '#app виден, часы в шапке UTC+7', JSON.stringify(prof.slice(3)));
     if (u === 'eng.rza') await page.screenshot({ path: path.join(OUT, 'f_app.png') });
-    await page.click('#btnLogout'); await sleep(600);
+    await doLogout(page); await sleep(600);
     ok(await locked(page), 'выход возвращает экран входа (' + fio + ')');
     ok(await page.evaluate(() => document.getElementById('loginPass').value === ''), 'пароль очищен после выхода');
   }
@@ -141,7 +152,7 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   ok(rows === 2, 'в #app таблица заявок содержит 2 строки', String(rows));
   await page.click('#pwdBody [data-res="1"]'); await sleep(300);
   ok(await page.evaluate(() => /APPROVED/.test(document.getElementById('pwdBody').textContent) || UsersDB.allRequests().some(r => r.status !== 'PENDING')), 'одобрение заявки работает');
-  await page.click('#btnLogout'); await sleep(500);
+  await doLogout(page); await sleep(500);
   await ctx.close();
   console.log('  консоль (блок 1–6): ' + (logs.length ? '\n    ' + logs.join('\n    ') : 'пусто'));
   ok(logs.length === 0, 'консоль чистая: 0 ошибок / 0 предупреждений / 0 HTTP 4xx');
@@ -179,7 +190,7 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   const jp = await page.evaluate(() => [document.getElementById('empName').textContent, document.getElementById('empRole').textContent]);
   ok(jp[0] === 'Эксперт Жюри', 'кнопка «Тестовый вход в режим Жюри» входит как Эксперт Жюри', JSON.stringify(jp));
   ok(events.some(e => e.type === 'login' && e.via === 'jury-test'), 'событие abai:auth via=jury-test', JSON.stringify(events));
-  await page.click('#btnLogout'); await sleep(600);
+  await doLogout(page); await sleep(600);
   ok(await page.evaluate(() => document.getElementById('auth').dataset.drawer === 'closed'), 'drawer закрыт после выхода');
 
   /* закрытие drawer: крестик, Escape, клик по фону */
@@ -218,12 +229,12 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   await page.evaluate(c => { const el = document.querySelector('#otp input'); const dt = new DataTransfer(); dt.setData('text', c); el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }, good);
   await waitApp(page); await sleep(300);
   ok(events.some(e => e.type === 'login' && /jury-code|jury-scan|jury-link|jury/.test(e.via || '')), 'вставка правильного кода из буфера → вход жюри', JSON.stringify(events.slice(-2)));
-  await page.click('#btnLogout'); await sleep(600);
+  await doLogout(page); await sleep(600);
   // универсальный PIN + «предыдущее окно»
   await page.click('#qrBtn'); await sleep(700); await page.click('#drawer .tabs [data-tab="phone"]'); await sleep(300);
   await (await page.$('#otp input')).click(); await page.keyboard.type('261126'); await waitApp(page);
   ok(true, 'универсальный PIN 261126 принимается');
-  await page.click('#btnLogout'); await sleep(600);
+  await doLogout(page); await sleep(600);
   const prevOk = await page.evaluate(() => { const w = UsersDB.jury.win(); return UsersDB.jury.verify(UsersDB.jury.codeFrom ? UsersDB.jury.codeFrom(w - 1) : '000000'); });
   ok(typeof prevOk !== 'undefined', 'verify() вызывается без исключений для окна −1');
   await ctx.close();
@@ -239,7 +250,7 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   await page.goto(URL + q); await waitApp(page); await sleep(300);
   ok(await page.evaluate(() => document.getElementById('empName').textContent === 'Эксперт Жюри'), 'ссылка с корректным кодом → вход жюри');
   ok(await page.evaluate(() => location.search === ''), 'параметры очищены из адресной строки (history.replaceState)');
-  await page.click('#btnLogout'); await sleep(500);
+  await doLogout(page); await sleep(500);
   await page.goto(URL + '?qr_auth=jury_session&code=000000'); await sleep(1200);
   ok(await locked(page), 'устаревшая/неверная ссылка не пускает');
   msg = await page.evaluate(() => document.getElementById('qrMsg').textContent + '|' + document.getElementById('authMsg').textContent); ok(/устар|неверн/i.test(msg), 'сообщение «ссылка устарела»', msg);

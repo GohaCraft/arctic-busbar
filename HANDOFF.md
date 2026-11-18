@@ -1,87 +1,108 @@
-# ARCTIC BUSBAR AI v2.4.0-prod — ПЕРЕДАЧА ЭТАП 1 → ЭТАП 2
+# ARCTIC BUSBAR AI v2.4.0-prod — ПЕРЕДАЧА ЭТАП 2 → ЭТАП 3
 
-Ты — следующий агент в конвейере. Проект: промышленный веб-комплекс предиктивной диагностики подстанций 110–220 кВ (демо InARCTic-2026, ЗГУ Норильск). Владелец — Левицкий А.Р. Работаешь на чистом HTML/CSS/JS без внешних библиотек, шрифтов и картинок (офлайн, открывается двойным кликом по index.html или через `python3 -m http.server`). Ответ — на русском, в 4 блока: дерево файлов, полный код тронутых файлов (готовыми файлами), отчёт, сообщение следующему агенту. Файлы не обрезай и не оставляй заглушек вида «остальной код без изменений».
+Ты — следующий агент в конвейере. Проект: промышленный веб-комплекс предиктивной диагностики болтовых соединений шин подстанций 110–220 кВ (демо InARCTic-2026, ЗГУ Норильск). Владелец — Левицкий А.Р. (пользователь пишет по-русски, часовой пояс Asia/Krasnoyarsk, UTC+7). Работаешь на чистом HTML/CSS/JS без внешних библиотек, шрифтов и картинок: офлайн, открывается двойным кликом по `index.html` (`file://`) или через `python3 -m http.server`. Ответ — на русском, в 4 блока: (1) дерево файлов, (2) полный код тронутых файлов готовыми файлами + архив, (3) `=== ОТЧЁТ ДЛЯ НАС: ЧТО СДЕЛАНО ===` (5–7 пунктов), (4) `=== СООБЩЕНИЕ ДЛЯ СЛЕДУЮЩЕГО АГЕНТА (СКОПИРОВАТЬ В НОВЫЙ ЧАТ) ===`. Файлы не обрезай и не оставляй заглушек вида «остальной код без изменений». Пользователь часто пишет только «continue» — это значит «продолжай по ТЗ, вопросов не задавай».
 
 ## 1. СТАТУС И ХВОСТЫ
 
-### Готово на 100% (проверено: 94 + 24 автотеста Playwright, консоль 0 ошибок / 0 предупреждений / 0 HTTP 4xx)
-- Экран `#auth`: процедурный canvas-фон 60 FPS (полярная ночь, расфокусированные огни подстанции, метель, конденсат, изморозь по краям, капли с физикой и чистыми следами, пружинный параллакс мыши/наклона телефона), стеклянная карточка в консольном стиле, шапка `[● CORE ONLINE] root@arctic-busbar:~/auth$ UTC+7 ЧЧ:ММ:СС [?]`.
-- Меню `[?]` с 3 аккаунтами (клик подставляет логин и пароль и закрывается), глазок `#eyeBtn`, вход по логину / табельному коду / ФИО, ошибки с упругим «встряхиванием» карточки, `ACCESS GRANTED // ЗАГРУЗКА ПРОФИЛЯ…` (1,4 с), открытие `#app` с ФИО / ID / ролью, «Выйти».
-- Восстановление пароля: лимит 1 запрос / 24 ч на аккаунт (localStorage, переживает перезагрузку, общий для логина / кода / ФИО), живой таймер остатка, письмо «Здравствуйте, ФИО (ID код) забыл пароль, измените пароль.» на `security-rza@nornickel-arctic.ru` + `mailto:` + запись в `UsersDB.allRequests()`; в `#app` → вкладка «Права и заявки»: «Одобрить / Отклонить» (одобрение выдаёт временный пароль).
-- QR-панель жюри (320 px, кнопка «QR жюри» слева внизу карточки): вкладка «На ПК (QR)» — настоящий QR на `#qrCanvas` (свой кодировщик ISO 18004, лучший из помещающихся уровней коррекции H → Q → M → L, тихая зона ≥ 4 модулей, круглый логотип без белого квадрата), 6 крупных ячеек PIN, полоска таймера 30 с, кнопка «Тестовый вход в режим Жюри»; вкладка «С телефона (ввод кода)» — 6 ячеек с автопереходом, вставкой из буфера, кнопка камеры (`getUserMedia` + `BarcodeDetector`); на экранах ≤ 820 px — автоматически вкладка телефона и нижняя шторка. QR проверен независимыми декодерами на живых скриншотах с бегущей линией: ZXing/WeChat — 20 из 20 кадров, OpenCV QRCodeDetector — 15 из 20 (он капризнее телефонных сканеров).
-- Автовход по ссылке из QR `?qr_auth=jury_session&code=XXXXXX` (адрес очищается через `history.replaceState`); устаревшая ссылка → сообщение + панель на вкладке телефона.
-- Живые часы UTC+7 на экране входа и в шапке `#app` (`#tClock`, пояс переключается `#selTz`), таймер сессии `#empSess`.
-- Мобильная раскладка 320–820 px, `prefers-reduced-motion` (один статичный кадр), файл открывается и по `file://`.
+### Готово на 100 % (проверено Playwright: этап 2 — 196 проверки, этап 1 — 94 + 24; консоль 0 ошибок / 0 предупреждений / 0 HTTP 4xx)
+- **Раскладка проекта по отделам**: `styles/auth|app`, `scripts/core|auth|app`, `tests`, `tools/i18n`. Экран `#auth` только перенесён и работает как раньше (визуал и капли — следующий этап).
+- **Каркас `#app` (Obsidian + Shadcn + iOS Glass)**: слева Ribbon 48 px (4 раздела, индикатор активного, подсказки; внизу круглая кнопка профиля с аватаром, точкой «онлайн» и бейджем заявок на сброс пароля для админа; одна шестерёнка «Настройки»; быстрый отчёт), сверху Topbar 48 px (название раздела + «PINN Core Online» | стеклянные метрики 110.0 кВ / Ток / Стык °C / RUL / ВВОД | выпадающее меню «Испытания стенда (Demo)» + живые часы UTC+7; ни одного `<select>`), рабочая область на 100 % ширины, Inspector `#insp` 320 px — стеклянный лист справа, выезжает только по клику на карточку датчика или узел графа, закрывается ×, Esc и кликом вне.
+- **Телефон ≤ 820 px**: верхняя полоса 44 px, таблицы превращаются в карточки, фиксированный «морозный» нижний Dock (Датчики, Граф, Аудит, Плагины, Настройки), окна и Inspector — нижние шторки; горизонтального переполнения нет (проверено на всех видах, окнах и вкладках).
+- **Профиль `#mProfile`, 3 вкладки**: (1) карточка сотрудника + блок «Мои права доступа» (срез RBAC текущего аккаунта, `#pfPerms`) + живой QR и 6-значный PIN на 30 с, привязанные к ТЕКУЩЕМУ аккаунту (`?qr_auth=session&uid=<ID>&code=<PIN>`), старая ссылка жюри `?qr_auth=jury_session` работает, `#btnLogout`; (2) матрица RBAC (4 права × 3 сотрудника, тумблеры админа → `UsersDB.setPerm` + запись в журнал, у жюри замок); (3) заявки на сброс пароля со счётчиком, «Одобрить» (временный пароль + копирование в 1 клик) / «Отклонить».
+- **Настройки `#mSettings`, одно окно, 4 раздела**: Интерфейс и тема (Dark Obsidian / Amber Industrial / Light Engineering, акцентный цвет → `--acc`), Язык и регион (6 языков мгновенно, пояс UTC+3/+7/+8/0), Производительность и анимации (анимации и параллакс, частота телеметрии, плавность графа 60 / Eco 30 кадров, показ формул Кирхгофа и Хольма на карточках и графе), База данных и бэкап (экспорт `.json`, восстановление, «Сброс демо» в два клика).
+- **6 языков RU / EN / ZH / KK / BE / UK**: 498 ключей, переключение без перезагрузки, включая `#auth`; журнал аудита языконезависим (`{k, p}`) и переводится целиком при смене языка; инициалы аватара на EN/ZH — латиницей.
+- **Живая среда**: граф `#graphCanvas` (12 узлов, физика Obsidian, drag / zoom / pan, hover-подсветка с затуханием остальных, импульсы по линиям, панель фильтров, миникарта `#miniMap`, на телефоне в портрете граф сам перестраивается вертикально, подписи не накладываются), 4 живых датчика без нулей (спарклайны, пунктирная уставка, калибровка с RBAC и записью в журнал), 3 испытания стенда (нагрев → авария → АВР на Ввод 2 → остывание; помеха пурги → Kirchhoff Guard; блэкаут → LTO → ДГУ), журнал аудита (предзаполнен, фильтры, сортировка, Rollback, CSV), плагины (9 встроенных, тумблеры, JSON-параметры, редактор своего JS / Python).
+- **Тосты, анимации** (смена вкладки 220 мс `cubic-bezier(.22,1,.36,1)`, мягкий пульс карточек вне уставки, `prefers-reduced-motion`, `body.no-animations`), окно «Отчёт для Claude» со stack trace и 5 последними пакетами.
+- **Реальные баги, найденные тестами и исправленные**: зависание страницы при ≥ 5 тостах; остаточный нагрев стыка после «нагрев → квитирование → сброс»; метка часового пояса отставала до секунды; «ВВОД 1» в тосте блэкаута вместо LTO; наложение подписей графа на телефоне; зачёркнутая плашка на спарклайне; смешение заголовков RBAC на телефоне.
 
-### Хвосты (не сделано, по убыванию важности)
-1. Вся логика `#app` НЕ написана (по ТЗ Этапа 1): симулятор датчиков, граф, таблицы, журнал аудита, плагины, демо-сценарии, словари языков. Каркас разметки есть, показания «0.0».
-2. i18n: в разметке 121 ключ `data-i18n` (русский текст в HTML = эталон RU-словаря), словаря и переключателя языка нет. Строки, зашитые в JS (`MSG` в auth.js, `msg(...)` в qr-jury.js, тексты в users-db.js), нужно провести через i18n, когда появится `I18N.t()`.
-3. Сканер камеры работает только там, где есть `BarcodeDetector` (Chrome / Edge / Android); в iOS Safari и Firefox его нет — остаются штатная камера телефона (откроет ссылку → автовход) и ручной ввод 6 цифр. JS-декодера QR-изображений нет (опциональный хвост).
-4. `store.js` должен слушать `abai:pwdrequest` и писать запись `PWD_RESET` в журнал аудита (в users-db.js оставлен такой комментарий), а также применять права `CAN_*` (`UsersDB.permsOf(id)`).
-5. Сессия не сохраняется при перезагрузке страницы (после F5 — снова экран входа); при желании хранить в `sessionStorage` из store.js.
-6. Скорость на реальной видеокарте не измерена (в headless на CPU 26–38 FPS; встроенный регулятор качества сам опускает уровень, если кадр > 26 мс дольше 2,5 с).
-7. Демо-данные: пароли в открытом виде и универсальный PIN `261126` — только для демонстрации; в продуктиве пароли заменяются bcrypt-хешами FastAPI (Phase 2).
-8. Светлая тема (`data-theme`) касается только `#app`; экран входа всегда тёмный «стеклянный».
+### Хвосты (не сделано / ограничения, по убыванию важности)
+1. **Следующий шаг по ТЗ — финальная полировка визуала `#auth`** (стекло, иней, капли). На экране входа НЕТ собственного переключателя языка: язык выбирается в `#app` → Настройки → «Язык и регион», сохраняется и применяется ко входу. Компактный переключатель на карточке входа — задача следующего этапа.
+2. **Скиллы `unslop` и `shadcn` не установлены**: в окружении прошлых чатов у Bash нет сети (pip / npm / git закрыты). Правила из ТЗ применены вручную (§2.3): компонентов `shadcn/ui` нет, токены и компоненты написаны на чистом CSS. Если нужны именно пакеты — разрешите сеть в настройках; изменение действует только в НОВОМ чате.
+3. **Переводы KK / BE / UK / ZH написаны агентом, без носителя языка** — нужна выборочная вычитка владельцем. Все 6 колонок заполнены, `build.py --check` — 0 ошибок; горизонтальных переполнений на длинных строках нет (автопроверка), визуально выборочно.
+4. **Python-плагины** сохраняются, показываются с меткой PY, но НЕ исполняются (Phase 2: сервер FastAPI). **JS-плагины** исполняются каждый такт, но изоляция — только затенение `window / document / localStorage / sessionStorage / fetch / XMLHttpRequest / Store / UsersDB` параметрами функции: это не песочница безопасности (демо).
+5. Демо-данные: пароли в открытом виде, универсальный PIN жюри `261126`. Временные пароли (одобренные заявки, `abai.pass_override`) в бэкап `.json` намеренно НЕ попадают (решение этапа 2).
+6. Сессия не переживает F5 (снова экран входа); настройки, уставки, плагины, журнал, заявки и права — переживают (localStorage, при его недоступности — память вкладки).
+7. FPS графа на реальной видеокарте не измерен: в headless на CPU порог теста ≥ 28 FPS.
+8. Сканер камеры QR работает только там, где есть `BarcodeDetector` (Chrome / Edge / Android); иначе — штатная камера телефона (ссылка → автовход) или ручной ввод 6 цифр.
+9. Светлая тема касается `#app`; экран входа всегда тёмный.
 
 ## 2. АРХИТЕКТУРА И КОНТРАКТЫ
 
-### Файлы (порядок подключения в конце index.html важен)
+### 2.1 Дерево проекта
 ```
-index.html                 разметка: #auth (вход + drawer + модалки), затем #app (каркас), затем скрипты
-styles/industrial.css      общая база и каркас #app (экран входа вынесен)
-styles/auth-glass.css      переменные --g-*, сцена, стекло, карточка, шапка-консоль, поля, кнопки, адаптив
-styles/auth-panels.css     меню [?], drawer, вкладки, QR / PIN / таймер, ячейки OTP, модалка восстановления, камера, шторка ≤ 820 px
-scripts/users-db.js        (1) данные: аккаунты, RBAC, сброс пароля, код и ссылка жюри (без UI)
-scripts/qr-encoder.js      (2) кодировщик QR (байтовый режим UTF-8, версии 1–10, ECC L/M/Q/H, маски 0–7)
-scripts/qr-jury.js         (3) drawer, отрисовка QR, PIN, ячейки, камера, автовход по ссылке
-scripts/frost-scene.js     (4) сцена фона: небо, огни, метель, силуэты, изморозь
-scripts/frost-drops.js     (5) физика капель и их отрисовка
-scripts/frost-canvas.js    (6) конвейер слоёв bgCanvas, параллакс, регулятор качества
-scripts/auth.js            (7) логика входа / выхода, [?], часы, восстановление пароля, shake
-scripts/app-shell.js       (8) каркас #app: вкладки, быстрые настройки, таблица заявок
-tests/e2e-stage1.js        основной набор (94 проверки)      tests/e2e-stage1-extra.js  дополнительный (24)
-HANDOFF.md                 это сообщение
+arctic-busbar-ai/
+├─ index.html                      разметка: #auth, #app (Ribbon, Topbar, 4 вида, Inspector, Dock, окна), SVG-спрайт иконок #i-*, шаблоны, затем скрипты
+├─ HANDOFF.md                      это сообщение
+├─ styles/auth/auth-glass.css      экран входа: переменные --g-*, сцена, стекло, карточка, поля, кнопки, адаптив
+├─ styles/auth/auth-panels.css     меню [?], drawer, вкладки, QR / PIN, OTP, модалка восстановления, камера
+├─ styles/app/tokens-shadcn.css    токены 3 тем, типографика, кнопки, тумблеры, бейджи, поля, сегменты, стекло .float, keyframes a-*
+├─ styles/app/obsidian-shell.css   сетка #app, Ribbon, Topbar, метрики, меню Demo, аварийная плашка, Inspector, Dock, тосты
+├─ styles/app/views-workspace.css  виды: датчики, граф (панель фильтров, миникарта), журнал аудита, плагины; телефонные стек-карточки
+├─ styles/app/modals-profile-set.css  менеджер окон, профиль (QR / RBAC / заявки), настройки, калибровка, редактор плагина, отчёт
+├─ scripts/core/users-db.js        данные: аккаунты, RBAC, сброс пароля, личные и жюри-PIN (без UI)
+├─ scripts/core/i18n.js            СГЕНЕРИРОВАН tools/i18n/build.py (движок + словарь 6 языков) — руками не править
+├─ scripts/core/store.js           настройки, уставки, плагины, журнал аудита + Rollback, бэкап, палитра canvas (без DOM-разметки)
+├─ scripts/auth/qr-encoder.js      кодировщик QR (ISO 18004, байтовый режим, версии 1–10, ECC L/M/Q/H)
+├─ scripts/auth/qr-jury.js         drawer, QR, PIN, ячейки, камера, автовход по ссылке; личные и жюри-сессии
+├─ scripts/auth/frost-scene.js     сцена фона #auth
+├─ scripts/auth/frost-drops.js     капли
+├─ scripts/auth/frost-canvas.js    конвейер слоёв, параллакс, регулятор качества
+├─ scripts/auth/auth.js            вход / выход, меню [?], восстановление пароля, часы входа
+├─ scripts/app/pinn-simulator.js   физическое ядро (без DOM): ток / напряжение, стык по Хольму, RUL, LTO / ДГУ, АВР, сценарии, плагины
+├─ scripts/app/obsidian-graph.js   граф топологии (Canvas 2D)
+├─ scripts/app/scada-ui.js         датчики, Inspector, калибровка, аудит, плагины, верхняя панель
+├─ scripts/app/app-shell.js        каркас: виды, окна, тосты, часы, Demo-меню, профиль, RBAC, заявки, настройки, отчёт
+├─ tools/i18n/dict.psv             ИСТОЧНИК переводов: key|ru|en|zh|kk|be|uk (498 строк)
+├─ tools/i18n/i18n.engine.js       шаблон движка (в него build.py вставляет словарь)
+├─ tools/i18n/build.py             сборка и проверка словаря → scripts/core/i18n.js
+└─ tests/e2e-stage1.js (94) · e2e-stage1-extra.js (24) · e2e-stage2-app.js (196) · out/ (скриншоты и выгрузки, создаётся тестами)
 ```
-Закомментированы в index.html (раскомментировать по мере появления файлов, иначе 404): `scripts/i18n.js`, `scripts/store.js`, `scripts/pinn-simulator.js`, `scripts/obsidian-graph.js`, `scripts/scada-ui.js`.
 
-### Стеклянный стиль (CSS-переменные `:root`, глобальные)
-`--g-bg:rgba(13,19,29,.58)  --g-bg-2:rgba(8,13,21,.80)  --g-blur:blur(30px) saturate(190%)  --g-line:rgba(255,255,255,.15)  --g-line-2:rgba(255,255,255,.08)  --g-spec:inset 0 1px 0 rgba(255,255,255,.24)  --g-shadow  --g-ice:#7DD3FC  --g-ice2:#38BDF8  --g-glow:rgba(56,189,248,.32)  --g-ok:#34D399  --g-warn:#FBBF24  --g-err:#FB7185  --g-tx:#E6EEF8  --g-dim:#8FA3BA  --g-faint:#5F738B  --g-field:rgba(3,7,12,.52)  --g-r:20px  --g-r-sm:12px  --g-mono  --g-sans  --g-ease  --g-spring`.
-Класс `.glass` (карточка, drawer, модалки): фон `var(--g-bg)`, `backdrop-filter: blur(30px) saturate(190%)` (+ `-webkit-`), рамка `1px solid var(--g-line)`, блик `var(--g-spec)`. Ловушка Backdrop Root: у предков `.glass` не должно быть `opacity<1`, `filter`, `clip-path`, `mask`; анимации на предках — с `backwards`. Консольная строка: класс `.term` (`.on` + `.dot`, `.path`, `.clock`, `.help`). Классы состояний: `.msg.err|ok|info`, `.card.shake|err`.
+### 2.2 Порядок подключения (в index.html важен)
+CSS: `auth-glass` → `auth-panels` → `tokens-shadcn` → `obsidian-shell` → `views-workspace` → `modals-profile-set`.
+JS: `users-db` → `i18n` → `store` → `qr-encoder` → `qr-jury` → `frost-scene` → `frost-drops` → `frost-canvas` → `auth` → `pinn-simulator` → `obsidian-graph` → `scada-ui` → `app-shell`. Новый файл — добавь в конец своего блока, иначе 404.
 
-### Классы и атрибуты `body`
-`body.locked` — виден экран входа (`#auth`), `#app` скрыт (`visibility:hidden; position:fixed`, чтобы не раздувать ширину страницы); `body.entering` — 0,7 с после входа; `body.no-animations` — отключает анимации; `body[data-role]` (`admin|operator|jury`) и `body[data-uid]` выставляются при входе; элементы `[data-perm=admin]` скрываются для не-админов.
+### 2.3 Дизайн-система (правила STEP 0, соблюдать)
+- Только моно-палитра Zinc / Slate: фон `#090A0F`, поднятые слои `#11131A`, плавающие панели `rgba(18,21,30,.72)` + `backdrop-filter: blur(24px) saturate(180%)`. Стекло ТОЛЬКО на плавающих слоях (`.float`: Inspector, окна, меню, Dock, тосты), не на колонках и карточках.
+- Границы — волосяные `1px solid var(--border)` (≈ 7 % белого) + блик `var(--spec)`. Никаких неоновых рамок 2–3 px, грубых пунктирных кнопок, пустых серых коробок.
+- Семантические токены по темам: `html[data-theme="dark|amber|light"]` (`--background --foreground --card --muted-foreground --border --acc --ok --warn --err …`); акцент `--acc` задаёт `Store` (`accent: null` = акцент темы). Цвет статуса несёт смысл (ok / warn / err).
+- Шрифты — системные стеки (`--font-sans` Inter / SF, `--font-mono` JetBrains Mono), числа `font-variant-numeric: tabular-nums`. Иконки — один SVG-спрайт `#i-*`, линия 1.5 px; базовый размер `:where(#app,#toasts) .ico` с нулевой специфичностью.
+- Keyframes приложения имеют префикс `a-`; `body.no-animations` и `prefers-reduced-motion` выключают анимации; глобально `[hidden]{display:none!important}`.
+- Раскладка `#app`: fixed-grid. Десктоп: `"rb top" 48px / "rb alarm" auto / "rb main" minmax(0,1fr)`; телефон: `"top" 44px "alarm" "main"` + `#mdock`. `#insp.open` выезжает; `body:has(#insp.open)` сдвигает аварийную плашку и тосты. Окна: `.wnd-wrap[data-open="1"]`, закрытие — любой `[data-close]`, Esc, клик по фону.
 
-### window.UsersDB (scripts/users-db.js)
-- Константы: `ENTERPRISE_ADMIN_EMAIL`, `MAIL_TEMPLATE{subject,body}`, `RESET_LIMIT_MS` (24 ч), `JURY_BASE_URL`, `JURY_QR_URL`, `PERMS` = `['CAN_SWITCH_RELAY','CAN_EDIT_PINN','CAN_ROLLBACK_LOGS','CAN_MANAGE_PLUGINS']`.
-- `authenticate(query, password)` → `{ok:true,user}` | `{ok:false, reason:'EMPTY'|'NO_USER'|'BAD_PASS', userId?}`; `user = {id, login, code, fio, role, roleLabel, perms}`.
-- `list()`, `find(q)` (логин / табельный код / ФИО без учёта регистра, точек, пробелов, ё/е), `juryUser()`, `permsOf(id)`, `setPerm(id, perm, bool)` → `{ok, userId, perm, old, value}` (жюри менять нельзя).
-- `requestReset(query)` → `{ok:true, request, to, subject, body, mailto, nextAt}` | `{ok:false, reason:'NO_USER'|'LIMIT', remainingMs, nextAt, fio, text}`; `request = {id:'PW-…', ts, userId, login, code, fio, text, to, status:'PENDING'|'APPROVED'|'REJECTED', by?, resolvedTs?}`.
-- `allRequests()`, `pending()`, `resolve(id, approve, by)` → `{ok, request, tempPassword}`; `remainingMs(userId)`, `formatClock(ms)` → `ЧЧ:ММ:СС`, `formatRemaining(ms)`, `resetLimit(userId)` (снять лимит: тесты / админ).
-- Жюри: `jury.win()`, `jury.code()`, `jury.left()` (0…1), `jury.verify(code)` — принимает текущее, предыдущее и следующее окно 30 с (допуск часов ±30 с) и универсальный PIN `261126`; `juryLink(code?)` → `<адрес страницы>?qr_auth=jury_session&code=XXXXXX` (при `file://` база — `http://192.168.4.1:8000/`; переопределяется `window.ABAI_JURY_URL` или localStorage `abai.jury_url`); `devices()`, `countDevice()`, `drawQR(canvas, text)`.
-- localStorage-ключи: `abai.pwd_last`, `abai.pwd_requests`, `abai.pass_override`, `abai.perms_override`, `abai.jury_devices`, `abai.jury_url` (если localStorage недоступен — копия в памяти вкладки).
+### 2.4 Глобальные объекты (контракты не ломать без нужды)
+- **`window.UsersDB`**: `authenticate(q, pass)`, `list()`, `find(q)`, `byId(id)`, `juryUser()`, `permsOf(id)`, `setPerm(id, perm, bool)` → `{ok, userId, perm, old, value}` (жюри менять нельзя), `requestReset(q)`, `allRequests()`, `pending()`, `resolve(id, approve, by)` → `{ok, request, tempPassword}`, `remainingMs`, `resetLimit`, `jury.{win,code,left,verify}` (допуск ±1 окно 30 с и универсальный PIN `261126`), `juryLink(code?)`, `session.{code(uid), match(code), link(uid, code?), verify(uid, code)}` (личный PIN / QR ЛЮБОГО аккаунта), `snapshot() / restore() / resetDemo()`. Аккаунты: `1073819 eng.rza / admin123 «Левицкий А.Р.» (admin)`, `1073820 disp.smena / operator123 «Соколов И.В.» (operator)`, `1073821 jury.qr / jury123 «Эксперт Жюри» (jury)`. Права: `CAN_SWITCH_RELAY`, `CAN_EDIT_PINN`, `CAN_ROLLBACK_LOGS`, `CAN_MANAGE_PLUGINS`.
+- **`window.I18N`**: `t(key, params, lang?)`, `has(key)`, `set(lang)`, `get()`, `apply(root)`, `dur(minutes)`, `langs`, `names`, `dict`. Разметка: `data-i18n`, `data-i18n-html`, `data-i18n-ph`, `data-i18n-title`, `data-i18n-aria`, `data-i18n-p='{"n":1}'`. Цепочка запасных значений: язык → en → ru → ключ.
+- **`window.Store`**: `get/set` настроек `{lang, theme, accent, anim, tz (utc3|utc7|utc8|utc0), tele, fps, fx}`; `thr.{all,get,set,fmt,reset}` — уставки `T_max 85 °C`, `I_max 1250 A`, `A_max 0.8 g`, `U_min 198 V`; `plugins.{list,get,enabled,setOn,setParams,add,remove}`; `audit.{list,count,find,registerUndo,rollback,csv}`; `log({cat,k,p,node,old,nw,undo,sys})`; `backup.{data,export,import,resetDemo}`; `fmtClock/fmtDT/toInput/fromInput/tzLabel`, `palette()` для canvas.
+- **`window.PINN`**: `state()`, `series(name)` → `{t, v, r}` (`temp|cur|acc|vdc|rk|volt`), `packets()`, `flows()`, `alarmNode`, `pluginErrors()`, `start/stop/isRunning`, `ack()`, `reset()`, `scenario('heat'|'spoof'|'blackout'|'reset')`, `act('transfer'|'return'|'dgu.start'|'dgu.stop')`, `rulOf(rk)`, `C`, `TOPO`. Ключи состояния: `T Tt Traw Rk F I U S freq acc vdc soc ltoT rul ltoState dgu in1 in2 ats src alarm guard spoofSeen scenario scenT h hT status`. Работает только между входом и выходом.
+- **`window.ObsidianGraph`**: `init/start/stop/resize/fit/focus/select/setPinned/nodes/edges/byId/hover/selected/camera/isRunning/stats/onSelect/onBackground`. Узлы: `in1 in2 ats bus1 bus2 joint core dgu lto s_cur s_ir s_vib`.
+- **`window.ScadaUI`**: `init/setView/renderGrid/renderAudit/renderPlugins/inspect/closeInspector/inspectorTarget/openCalibration/openPluginEditor/auditFilter/evText/whoName/tok/can/stats/start/stop/ackAlarm/rollback/fio`.
+- **`window.AppShell`**: `show(view)`, `view()`, `openWnd(id, focusEl?)`, `closeWnd(id)`, `closeAll`, `toast(kind, title, text)`, `inspect`, `open('profile'|'settings'|'crash')`, `openProfile(tab)`, `openSettings`, `refreshAccess`, `renderRequests`, `renderRbac`, `copy`, `state()`.
+- **`window.AuthApp`** `{user, isAuthed, logout, login, shake, profile, clock}`; **`QRJury`**, **`QREncoder`**, **`FrostCanvas`** — как в этапе 1.
 
-### Остальные публичные объекты
-- `window.AuthApp = {user(), isAuthed(), logout(), login(user, via), shake(), profile(user), clock()}`; строка профиля `<id>_<язык>_<тема>_<вид>_<пояс>_<anim>`, например `1073819_ru_dark_grid_utc7_anim1` (вид `grid|graph`).
-- `window.QRJury = {init, toggle(force), setTab('pc'|'phone'), refresh(force), encodeBest(text), drawQR(canvas, qr), codeFrom(text), submit(code, via), consumeUrlAuth(), closeCam(), isOpen(), state() → {code, url, version, ecc}}`; `window.QREncoder = {encode(text,{ecc,minVersion,maxVersion,mask}), capacityBytes, MAX_VERSION}`.
-- `window.FrostCanvas = {ok, start(), stop(), wipe(x, y, px, py), pulse(a), setReduced(bool), stats()}`; запускается сам по `body.locked`, останавливается при входе.
-- `window.AppShell = {show(view), renderPwd(), profile(), TZ}`; виды: `grid | graph | audit | rbac | plugins | settings`.
+### 2.5 События `window` (`e.detail`)
+`abai:auth {type:'login'|'logout', user, via}` · `abai:jury-ok / abai:jury-fail {via}` · `abai:session-ok {user, via}` (личный вход с телефона) · `abai:pwdrequest / abai:pwdresolved` · `abai:settings {key,value}` · `abai:lang {lang}` · `abai:thresholds {key,value,old}` · `abai:plugins {id,…}` · `abai:audit {entry}` · `abai:restored` · `abai:sim` (каждый такт) · `abai:alarm` · `abai:ats` · `abai:dgu` · `abai:scenario` · `abai:spoof` · `abai:plugin-alarm {id,note}` · `abai:plugin-error {id,message}`.
 
-### События на `window` (CustomEvent, данные в `e.detail`)
-- `abai:auth` — `{type:'login'|'logout', user, via:'password'|'jury-test'|'jury-code'|'jury-scan'|'jury-link', ts}` (при logout `via` нет, `user` — вышедший).
-- `abai:pwdrequest` — объект заявки (см. выше); `abai:pwdresolved` — `{request, tempPassword}`.
-- `abai:jury-ok` / `abai:jury-fail` — `{via}`; вход выполняет auth.js.
+### 2.6 DOM-контракт (id и data-хуки, на которые опираются тесты)
+Каркас: `app ribbon rbNav rbInd btnProfile rbAva btnSettings btnCrash top secTitle coreStatus metrics tU tI tT tRul tSrc btnDemo demoMenu demoHeat demoSpoof demoBlackout demoReset tClock tzLabel alarm alarmAck main mdock btnProfileM btnDemoM mAva insp inspTitle inspClose inspBody toasts`. Виды: `view-grid (gridSearch gridTags sensorGrid)`, `view-graph (gWrap graphCanvas gPanel gSearch gShowS gShowR gShowF gRep gLen gFlow gFit gPin miniMap gTip)`, `view-audit (auditPeriod auditUser auditType auditCsv auditTable auditBody)`, `view-plugins (btnAddPlugin plCount plugList)`. Окна: `mProfile (empName empId empRole pfPerms pfQr pfPin pfLink btnLogout rbMatrix pwdTable pfReqCount; вкладки .wnd-tab[data-tab="id|rbac|req"])`, `mSettings (themeGrid accRow inpAccent chkFx langGrid segTz chkAnim segTele segFps btnBackup btnRestore fileRestore btnResetDemo dbStat; разделы .st-nav button[data-cat="ui|lang|perf|db"])`, `mCalib`, `mPlugin (plName plLang plParams plCode plErr plSave)`, `mCrash`. Хуки: карточка датчика `[data-sid]` + `data-st="ok|warn|err"`; строка плагина `.pl-row[data-id][data-on]`, кнопки `data-pl-on / data-pl-cfg / data-pl-del`; тумблер RBAC `input[data-rbac="PERM"][data-uid]`; тумблеры — `label.sw` со скрытым checkbox; «Сброс демо» взводится первым кликом (`data-arm="1"`, 3.5 с) и выполняется вторым.
 
-### Каркас `#app`: готовые id и хуки
-Шапка: `tU tI tT tRul tSrc` (показатели), `tzLabel tClock cfgString`, `selLang selTheme selTz`, `btnCrash`, демо `demoHeat demoSpoof demoBlackout demoReset`, `alarm`, `linkBar`. Профиль: `empAva empName empId empRole empSess`, `btnLogout`. Счётчики вкладок: `cGrid cGraph cAudit cPwd cPlug`. Виды: `view-grid` (`gridSearch gridTags`, карточки датчиков `MLX90614-IR-01 INA219-CUR-01 MPU6050-VIB-01 LTO-BAT-BUF`), `view-graph` (`graphCanvas gSearch gRep gLen gFlow gShowS gShowR gShowF gFit gPin miniMap`), `view-audit` (`auditPeriod auditFrom auditTo auditUser auditType auditCsv auditBackup auditRestore auditTable auditBody`), `view-rbac` (`rbacTable rbacBody pwdTable pwdBody`), `view-plugins` (`btnAddPlugin btnUpdate updMsg pluginTable`), `view-settings` (`inpAccent chkAnim btnBackup btnRestore`), инспектор `insp inspClose inspBody`, модалки `mQr mCrash mPlugin`, шаблон состояний `<template id="tplStates">` (`data-s="empty|offline|error|loading"`). Хуки: `data-view`, `data-act="calib|params|qr"`, `data-tag`, `data-set="lang|theme|tz"`, `data-i18n`, `data-perm="admin"`; закрытие модалок — `[data-close]`.
+### 2.7 Контракт пользовательского JS-плагина
+Тело функции; на входе `plugin = {packet:{temp,cur,volt,vib,vdc}, params, state:{src,ats,scenario}}`, на выходе `{alarm: boolean, note?: string}`. Первый `alarm:true` пишет в журнал `ev.plugin.alarm`; исключение — `ev.plugin.error` и красная метка в строке. Код проверяется при сохранении (`new Function`).
 
-### Как тестировать
-`python3 -m http.server 8765 --bind 127.0.0.1` в корне проекта, затем `NODE_PATH=$(npm root -g) node tests/e2e-stage1.js` и `…/e2e-stage1-extra.js` (нужны playwright и Chromium); код выхода 0 = всё зелёное. После каждого этапа прогоняй оба набора как регрессию.
+### 2.8 Журнал аудита и Rollback
+Запись: `{id:'TX-104xxx', ts, userId, user, role, cat, k, p, node, old, nw, undo, rb}`. `cat`: `AUTH PWD_RESET RBAC RELAY PINN THRESHOLD PLUGIN CONFIG ROLLBACK`. Текст события — `I18N.t(k, p)` при отрисовке (отсюда мгновенная смена языка). Откат: `undo = {kind, data}`, обработчик регистрируется `Store.audit.registerUndo(kind, fn)` (виды `setpoint node plugin pluginParams rbac sensor`); нужен `CAN_ROLLBACK_LOGS`; откат пишет `ROLLBACK`, а исходная запись получает `rb:true`. Лимит 500 записей.
 
-## 3. ПЛАН СЛЕДУЮЩЕГО ШАГА (ЭТАП 2: логика `#app`)
-Файлы по порядку (раскомментировать строки в index.html по мере готовности):
-1. `scripts/i18n.js` — словари RU / EN для всех 121 ключей `data-i18n` (RU берётся из текущей разметки), `I18N.t(key)`, `I18N.apply(root)`, `I18N.set(lang)`, событие `abai:lang`; привязка к `#selLang` и `.seg[data-set=lang]`; перевести строки из auth.js / qr-jury.js.
-2. `scripts/store.js` — состояние приложения и шина событий, журнал аудита (запись `PWD_RESET` по `abai:pwdrequest`, вход / выход по `abai:auth`), проверка прав `CAN_*` через `UsersDB.permsOf`, экспорт / импорт резервной копии, (по желанию) сохранение сессии.
-3. `scripts/pinn-simulator.js` — симулятор датчиков (температура LWIR, ток / напряжение МЭК 61850, вибрация, питание LTO / ДГУ), законы Кирхгофа, прогноз RUL, сценарии из панели `demo*`.
-4. `scripts/obsidian-graph.js` — граф топологии на `#graphCanvas` + `#miniMap`, поиск, фильтры, закрепление узлов, инспектор `#insp`.
-5. `scripts/scada-ui.js` — карточки датчиков, фильтры и теги, журнал аудита (период, пользователь, тип, CSV), вкладки прав и плагинов, состояния `tplStates`, модалка отчёта об ошибке.
-Правила: запускать циклы только по `abai:auth login`, останавливать по `logout`; не менять контракты `abai:*` и `UsersDB` без необходимости; файлы auth-* / qr-* / frost-* трогать только при баге; в консоли 0 ошибок и 0 404; все новые CSS-переменные добавлять рядом с `--g-*`.
+### 2.9 i18n: как добавить или изменить текст
+1. Правь `tools/i18n/dict.psv` (строка `ключ|ru|en|zh|kk|be|uk`, все 6 колонок обязательны; `|` внутри текста нельзя).
+2. `python3 tools/i18n/build.py` — валидирует (пустые колонки, лишние и отсутствующие ключи, плейсхолдеры `{n}`) и пересобирает `scripts/core/i18n.js`; `--check` только проверяет.
+3. В коде `T('ключ', {n: 1})`, в разметке `data-i18n="ключ"`. Динамический текст перерисовывай по `abai:lang`. Не вшивай русский текст в JS.
+
+### 2.10 Как тестировать
+Сервер: `cd` в корень проекта, `python3 -m http.server 8765 --bind 127.0.0.1` (если `curl http://127.0.0.1:8765/index.html` не даёт 200 — перезапусти). Прогон: `NODE_PATH=$(npm root -g) node tests/e2e-stage2-app.js` (≈ 6–8 мин) и `tests/e2e-stage1.js`, `tests/e2e-stage1-extra.js`; код выхода 0 = всё зелёное. Выборочно: `ABAI_ONLY=6,7 … node tests/e2e-stage2-app.js` (номера блоков 1–16). Блок 16 — чистота консоли и сети за весь прогон. Хелперы: `ok() section() fresh() loginAs() openProfile() logout() auditTop() waitFor() nodePos()`. Playwright + Chromium уже установлены; `deviceScaleFactor: 2` для скриншотов, которые смотрит человек.
+
+## 3. ПЛАН СЛЕДУЮЩЕГО ШАГА (ЭТАП 3: финальная полировка `#auth`)
+1. **Визуал `#auth`**: довести стеклянную карточку, иней по краям, конденсат и капли (физика, чистые следы, поведение на телефоне) до уровня `#app`; правила STEP 0 (никакого AI-slop) действуют и здесь. Файлы: `styles/auth/*`, `scripts/auth/frost-*.js`, при необходимости `index.html` (только блок `#auth`).
+2. **Переключатель языка на экране входа** (компактный, 6 языков, без `<select>`, через `Store.set('lang', …)`), проверить длинные строки ZH / KK / BE / UK на карточке и в drawer.
+3. Выборочная вычитка переводов владельцем (хвост 3); при желании — реальные пакеты `unslop` / `shadcn`, если в новом чате включена сеть (хвост 2).
+4. Регрессия: все три набора тестов зелёные (94 + 24 + 196, при изменении числа проверок обнови цифры здесь), консоль 0 ошибок / 0 предупреждений / 0 404. Контракты `abai:*`, `UsersDB`, `Store`, `I18N` и DOM-хуки из §2.6 не менять без нужды; `#app` трогать только при баге.
+5. Обнови этот файл и выдай ответ в 4 блока.
