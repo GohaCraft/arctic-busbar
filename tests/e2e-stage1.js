@@ -1,5 +1,5 @@
 /* ARCTIC BUSBAR AI v2.4.0-prod: tests/e2e-stage1.js
-   Основной интерактивный набор ЭТАПА 1 (94 проверки; адаптирован под структуру этапа 2): часы, [?], глазок, ошибки, 3 входа, выход, восстановление 24 ч, QR-панель, PIN-ячейки, ссылка, мобильный, reduced-motion.
+   Основной интерактивный набор ЭТАПА 1 (адаптирован под этапы 2 и 3): часы, [?], глазок, ошибки (нейтральное сообщение), 3 входа, выход, восстановление 24 ч, QR-панель, PIN-ячейки, вход по подписанному токену (#abai-qr=…), мобильный, reduced-motion.
    Запуск (из корня проекта):
      python3 -m http.server 8765 --bind 127.0.0.1 &            # сервер статики
      NODE_PATH=$(npm root -g) node tests/e2e-stage1.js                  # нужен playwright (npm i -g playwright) и Chromium
@@ -84,11 +84,11 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   await page.fill('#loginUser', ''); await page.fill('#loginPass', ''); await page.click('#loginBtn'); await sleep(200);
   let msg = await page.textContent('#authMsg'); ok(/Введите логин/.test(msg), 'пустая форма → сообщение', msg);
   ok(await page.evaluate(() => document.getElementById('card').classList.contains('shake')), 'карточка трясётся (shake)');
-  await login(page, 'nobody', 'x'); await sleep(200); msg = await page.textContent('#authMsg'); ok(/не найден/.test(msg), 'неизвестный пользователь', msg);
-  await login(page, 'eng.rza', 'wrong'); await sleep(200); msg = await page.textContent('#authMsg'); ok(/Неверный пароль/.test(msg), 'неверный пароль', msg);
+  await login(page, 'nobody', 'x'); await sleep(450); msg = await page.textContent('#authMsg'); ok(/Неверный логин или пароль/.test(msg), 'неизвестный пользователь → нейтральное сообщение (логины не перебираются)', msg);
+  const msgUnknown = msg; await login(page, 'eng.rza', 'wrong'); await sleep(450); msg = await page.textContent('#authMsg'); ok(/Неверный логин или пароль/.test(msg) && msg === msgUnknown, 'неверный пароль → то же самое сообщение, что и для неизвестного логина', msg);
   ok(await locked(page), 'после ошибок остаёмся на экране входа');
   await page.screenshot({ path: path.join(OUT, 'f_err.png') });
-  await login(page, 'eng.rza', 'jury123'); await sleep(200); msg = await page.textContent('#authMsg'); ok(/Неверный пароль/.test(msg), 'пароль чужого аккаунта не подходит', msg);
+  await login(page, 'eng.rza', 'jury123'); await sleep(450); msg = await page.textContent('#authMsg'); ok(/Неверный логин или пароль/.test(msg), 'пароль чужого аккаунта не подходит', msg);
 
   /* ============ 5. успешные входы тремя способами + выход ============ */
   console.log('\n[5] Вход: логин / табельный код / ФИО, роли, выход');
@@ -166,7 +166,7 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   await page.evaluate(() => { window.addEventListener('abai:auth', e => window.__ev({ type: e.detail.type, via: e.detail.via, id: e.detail.user && e.detail.user.id })); });
   await page.click('#qrBtn'); await sleep(900);
   const dr = await page.evaluate(() => { const d = document.getElementById('drawer'), r = d.getBoundingClientRect(), c = document.getElementById('card').getBoundingClientRect(); return { open: document.getElementById('auth').dataset.drawer, w: Math.round(r.width), x: Math.round(r.left), cardR: Math.round(c.right), vis: getComputedStyle(d).visibility, tab: d.dataset.tab, hid: d.getAttribute('aria-hidden'), inert: d.inert }; });
-  ok(dr.open === 'open' && dr.w === 320 && dr.vis === 'visible' && dr.hid === 'false' && !dr.inert, 'drawer выехал, ширина 320px', JSON.stringify(dr));
+  ok(dr.open === 'open' && dr.w === 324 && dr.vis === 'visible' && dr.hid === 'false' && !dr.inert, 'drawer выехал, ширина 324px', JSON.stringify(dr));
   ok(dr.x >= dr.cardR, 'drawer справа от карточки (без перекрытия)', dr.x + ' >= ' + dr.cardR);
   ok(dr.tab === 'pc', 'на десктопе активна вкладка «На ПК (QR)»');
   await page.screenshot({ path: path.join(OUT, 'f_drawer.png') });
@@ -177,9 +177,10 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   ok(cellsN === 6, '6 крупных ячеек PIN');
   // QR → png → cv2
   const qrEl = await page.$('#qrCanvas'); await qrEl.screenshot({ path: path.join(OUT, 'f_qr.png') });
-  const qrUrl = await page.evaluate(() => UsersDB.juryLink(UsersDB.jury.code()));
+  const qrUrl = await page.evaluate(() => QRJury.state().url);
   fs.writeFileSync(path.join(OUT, 'f_qr_expected.txt'), qrUrl);
-  ok(/qr_auth=jury_session&code=\d{6}$/.test(qrUrl), 'ссылка QR вида ?qr_auth=jury_session&code=XXXXXX', qrUrl);
+  ok(/#abai-qr=[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{20,}$/.test(qrUrl), 'ссылка QR вида <адрес>#abai-qr=<подписанный токен>', qrUrl.slice(0, 80));
+  ok(!/[?&](code|qr_auth|uid)=/.test(qrUrl) && qrUrl.indexOf(code) < 0, 'в ссылке нет открытого кода и параметров ?code= / ?qr_auth=', qrUrl.slice(0, 80));
   const t0 = await page.evaluate(() => document.querySelector('[data-qr-timer]').style.transform || getComputedStyle(document.querySelector('[data-qr-timer]')).width);
   await sleep(1300);
   const t1 = await page.evaluate(() => document.querySelector('[data-qr-timer]').style.transform || getComputedStyle(document.querySelector('[data-qr-timer]')).width);
@@ -241,20 +242,31 @@ async function waitApp(page) { await page.waitForFunction(() => !document.body.c
   console.log('  консоль (блок 7–8): ' + (logs.length ? '\n    ' + logs.join('\n    ') : 'пусто'));
   ok(logs.length === 0, 'консоль чистая: 0 ошибок / 0 404');
 
-  /* ============ 9. вход по ссылке из QR ============ */
-  console.log('\n[9] Вход по ссылке ?qr_auth=jury_session&code=…');
+  /* ============ 9. вход по подписанной ссылке из QR ============ */
+  console.log('\n[9] Вход по ссылке <адрес>#abai-qr=<токен> (HS256, TTL 90 с, открытых кодов в адресе нет)');
   ({ ctx, page, logs } = await fresh(browser));
   await page.goto(URL); await sleep(900);
-  const link = await page.evaluate(() => UsersDB.juryLink(UsersDB.jury.code()));
-  const q = link.slice(link.indexOf('?'));
-  await page.goto(URL + q); await waitApp(page); await sleep(300);
-  ok(await page.evaluate(() => document.getElementById('empName').textContent === 'Эксперт Жюри'), 'ссылка с корректным кодом → вход жюри');
-  ok(await page.evaluate(() => location.search === ''), 'параметры очищены из адресной строки (history.replaceState)');
+  const link = await page.evaluate(() => UsersDB.jury.link());
+  ok(/#abai-qr=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(link) && !/[?&]code=/.test(link), 'витрина жюри (DEMO) выдаёт ссылку с токеном, без открытого кода', link.slice(0, 80));
+  await page.goto('about:blank'); await page.goto(link); await waitApp(page); await sleep(300);
+  ok(await page.evaluate(() => document.getElementById('empName').textContent === 'Эксперт Жюри'), 'ссылка с корректным токеном → вход жюри');
+  ok(await page.evaluate(() => location.search === '' && location.hash === ''), 'токен стёрт из адресной строки (history.replaceState)', await page.evaluate(() => location.href));
   await doLogout(page); await sleep(500);
-  await page.goto(URL + '?qr_auth=jury_session&code=000000'); await sleep(1200);
-  ok(await locked(page), 'устаревшая/неверная ссылка не пускает');
-  msg = await page.evaluate(() => document.getElementById('qrMsg').textContent + '|' + document.getElementById('authMsg').textContent); ok(/устар|неверн/i.test(msg), 'сообщение «ссылка устарела»', msg);
+  /* старая ссылка с открытым кодом отвергается явно */
+  await page.goto('about:blank'); await page.goto(URL + '?qr_auth=jury_session&code=000000'); await sleep(1700);
+  ok(await locked(page), 'старая ссылка ?qr_auth=…&code=… не пускает');
+  msg = await page.evaluate(() => document.getElementById('authMsg').textContent + '|' + document.getElementById('qrMsg').textContent);
+  ok(/больше не принимаются|устарела/i.test(msg), 'сообщение «Ссылка устарела: коды в адресе больше не принимаются»', msg);
+  ok(await page.evaluate(() => location.search === ''), 'параметры ?qr_auth / code стёрты из адресной строки');
   ok(await page.evaluate(() => document.getElementById('auth').dataset.drawer === 'open' && document.getElementById('drawer').dataset.tab === 'phone'), 'drawer открыт на вкладке телефона для ручного ввода');
+  /* подмена подписи */
+  const li = link.lastIndexOf('.') + 1, badLink = link.slice(0, li) + (link[li] === 'A' ? 'B' : 'A') + link.slice(li + 1);
+  await page.goto('about:blank'); await page.goto(badLink); await sleep(1700);
+  ok(await locked(page), 'токен с испорченной подписью не пускает');
+  ok(await page.evaluate(() => !Object.keys(sessionStorage).some(k => k.indexOf('abai.s.') === 0)), 'после отказа в sessionStorage нет ключей сессии');
+  /* срок жизни */
+  const expd = await page.evaluate(() => { const t = UsersDB.jury.link(), real = Date.now.bind(Date); Date.now = () => real() + 100000; const r = UsersDB.qr.redeem(t); Date.now = real; return r; });
+  ok(!expd.ok && expd.reason === 'EXPIRED', 'токен старше 90 с отвергается (EXPIRED)', JSON.stringify(expd));
   await ctx.close();
   ok(logs.length === 0, 'консоль чистая (ссылки)', logs.join(' | '));
 

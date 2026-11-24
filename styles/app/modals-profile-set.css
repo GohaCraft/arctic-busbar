@@ -17,6 +17,7 @@
 .wnd-tab:hover,.wnd-tab.on{color:var(--foreground)}
 .wnd-tab::after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:2px;border-radius:2px 2px 0 0;background:var(--acc);transform:scaleX(0);transition:transform 260ms var(--ease)}
 .wnd-tab.on::after{transform:scaleX(1)}
+#app .wnd-tab:focus-visible{outline-offset:-4px;border-radius:8px}                      /* кольцо фокуса внутри вкладки: контейнер с overflow-x обрезал бы его сверху и снизу */
 .wnd-tab .pill{height:18px;padding:0 6px}
 .wnd-body{flex:1;min-height:0;overflow:auto;padding:20px}
 .wnd-pane{display:none}

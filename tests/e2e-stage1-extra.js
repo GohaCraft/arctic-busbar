@@ -28,11 +28,12 @@ async function mk(browser, opts) { const ctx = await browser.newContext(opts); c
   ok(!w.vFar, 'verify отклоняет код на 2 окна дальше (±60 с)', String(w.vFar));
   ok(w.vUni, 'универсальный PIN 261126 принимается'); ok(!w.vBad && !w.vTxt, 'короткие/нецифровые строки отклоняются');
   const before = await page.evaluate(() => Array.from(document.querySelectorAll('#drawer .code b')).map(b => b.textContent).join(''));
+  w.url0 = await page.evaluate(() => QRJury.state().url);
   await page.evaluate(() => { const real = Date.now.bind(Date); Date.now = () => real() + 31000; });
   await sleep(450);
-  const after = await page.evaluate(() => [Array.from(document.querySelectorAll('#drawer .code b')).map(b => b.textContent).join(''), UsersDB.jury.code(), document.querySelector('[data-qr-url]').title]);
+  const after = await page.evaluate(() => [Array.from(document.querySelectorAll('#drawer .code b')).map(b => b.textContent).join(''), UsersDB.jury.code(), QRJury.state().url]);
   ok(after[0] !== before && after[0] === after[1], 'ячейки PIN обновились при смене окна без перезагрузки', before + ' → ' + after[0]);
-  ok(after[2].endsWith('code=' + after[1]), 'ссылка QR обновилась вместе с кодом', after[2]);
+  ok(/#abai-qr=/.test(after[2]) && after[2] !== w.url0 && after[2].indexOf(after[1]) < 0, 'ссылка QR выпущена заново (новый токен) и не содержит кода', after[2].slice(0, 60));
   await ctx.close();
 
   console.log('\n[B] Камера: оверлей сканера (fake device)');
@@ -50,8 +51,8 @@ async function mk(browser, opts) { const ctx = await browser.newContext(opts); c
   ({ ctx, page, logs } = await mk(browser, { viewport: { width: 1440, height: 900 } }));
   await page.goto('file://' + require('path').resolve(__dirname, '../index.html')); await sleep(1500);
   ok(await page.evaluate(() => document.body.classList.contains('locked') && FrostCanvas.ok && document.getElementById('bgCanvas').width > 100), 'экран входа и фон работают с file://');
-  const lk = await page.evaluate(() => UsersDB.juryLink('123456'));
-  ok(/^http:\/\/192\.168\.4\.1:8000\/\?qr_auth=jury_session&code=123456$/.test(lk), 'ссылка QR при file:// — адрес стенда http://192.168.4.1:8000/', lk);
+  const lk = await page.evaluate(() => UsersDB.jury.link());
+  ok(/^http:\/\/192\.168\.4\.1:8000\/#abai-qr=[A-Za-z0-9_.-]+$/.test(lk), 'ссылка QR при file:// — адрес стенда http://192.168.4.1:8000/ + токен в #', lk.slice(0, 70));
   await page.click('#qrBtn'); await sleep(900); await page.click('#qrJury'); await page.waitForFunction(() => !document.body.classList.contains('locked'), null, { timeout: 5000 }); ok(true, 'тестовый вход жюри работает с file://');
   ok(logs.length === 0, 'консоль чистая (file://)', logs.join(' | ')); await ctx.close();
 

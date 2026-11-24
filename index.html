@@ -2,19 +2,30 @@
 <html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-visual">
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#050E1A">
 <title>ARCTIC BUSBAR AI v2.4.0-prod</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230B2B4A'/%3E%3Cpath d='M18 4L8 18h7l-2 10 11-15h-7z' fill='%2338BDF8'/%3E%3C/svg%3E">
+<script>
+/* До первой отрисовки: тема / фон / «Полярная ночь» из настроек и признак «сессия во вкладке есть» (F5) — экран входа не мигает.
+   Здесь нет ни токенов, ни прав: только булевы признаки. Источник правды по сессии — Store.session (scripts/core/store.js). */
+(function () {
+  var d = document.documentElement;
+  try { var s = JSON.parse(window.localStorage.getItem('abai.settings') || '{}'); if (s.theme) d.setAttribute('data-theme', s.theme); if (s.bg) d.setAttribute('data-bg', s.bg); d.setAttribute('data-polar', s.polar ? '1' : '0'); } catch (e) { /* настройки недоступны */ }
+  try { if (window.sessionStorage.getItem('abai.s.tok')) d.classList.add('restoring'); } catch (e) { /* sessionStorage недоступен */ }
+})();
+</script>
 <!-- Отдел 1: экран входа (#auth) -->
 <link rel="stylesheet" href="styles/auth/auth-glass.css">
 <link rel="stylesheet" href="styles/auth/auth-panels.css">
 <!-- Отдел 2: внутренний интерфейс (#app) -->
 <link rel="stylesheet" href="styles/app/tokens-shadcn.css">
+<link rel="stylesheet" href="styles/app/backgrounds.css">
 <link rel="stylesheet" href="styles/app/obsidian-shell.css">
 <link rel="stylesheet" href="styles/app/views-workspace.css">
 <link rel="stylesheet" href="styles/app/modals-profile-set.css">
+<link rel="stylesheet" href="styles/app/hardware-plugins.css">
 </head>
 <body class="locked">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -59,12 +70,24 @@
 <symbol id="i-wave" viewBox="0 0 16 16"><path d="M1.5 8c1.5-4 2.5-4 4 0s2.5 4 4 0 2.5-4 4 0"/></symbol>
 <symbol id="i-code" viewBox="0 0 16 16"><path d="M5.5 4.5 2 8l3.5 3.5M10.5 4.5 14 8l-3.5 3.5"/></symbol>
 <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+<symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z"/></symbol>
+<symbol id="i-sun" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1"/></symbol>
+<symbol id="i-chip" viewBox="0 0 16 16"><path d="M4 4h8v8H4zM6.5 1.5V4M9.5 1.5V4M6.5 12v2.5M9.5 12v2.5M1.5 6.5H4M1.5 9.5H4M12 6.5h2.5M12 9.5h2.5"/></symbol>
+<symbol id="i-phone" viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.6"/><path d="M7 12.5h2"/></symbol>
+<symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.5 3.5h4.6l1.5 1.7h6.9v7.8H1.5z"/></symbol>
+<symbol id="i-file" viewBox="0 0 16 16"><path d="M3.5 1.5h6l3 3v10h-9zM9.5 1.5v3h3"/></symbol>
+<symbol id="i-radar" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><circle cx="8" cy="8" r="2.6"/><path d="M8 8l4.2-4.2"/></symbol>
+<symbol id="i-book" viewBox="0 0 16 16"><path d="M1.8 3h4.6A1.6 1.6 0 0 1 8 4.6V14a1.6 1.6 0 0 0-1.6-1.4H1.8zM14.2 3H9.6A1.6 1.6 0 0 0 8 4.6V14a1.6 1.6 0 0 1 1.6-1.4h4.6z"/></symbol>
+<symbol id="i-link" viewBox="0 0 16 16"><path d="M6.6 9.4l2.8-2.8M5 8 3.7 9.3a2.2 2.2 0 0 0 3.1 3.1L8 11.2M11 8l1.3-1.3a2.2 2.2 0 0 0-3.1-3.1L8 4.8"/></symbol>
+<symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4"/></symbol>
+<symbol id="i-edit" viewBox="0 0 16 16"><path d="M2 14l.7-3L11 2.7a1.4 1.4 0 0 1 2 0l.3.3a1.4 1.4 0 0 1 0 2L5 13.3z"/></symbol>
+<symbol id="i-layers" viewBox="0 0 16 16"><path d="M8 2 1.8 5.4 8 8.8l6.2-3.4zM1.8 8.6 8 12l6.2-3.4"/></symbol>
 </defs></svg>
 
 <template id="tplStates">
 <div data-s="loading"><i class="spin"></i><span data-i18n="st.loading">Загрузка / синхронизация…</span></div>
 <div data-s="empty"><b>∅</b><span data-i18n="st.empty">Нет записей, подходящих под фильтр</span></div>
-<div data-s="offline"><b>!</b><span data-i18n="st.offline">COM-порт оборудования offline → InARCTic Mathematical Stream Active</span></div>
+<div data-s="offline"><b>!</b><span data-i18n="st.offline">Нет данных с оборудования. Подключите ESP32 или шлюз FastAPI.</span><button type="button" class="btn btn-sm" data-open="hardware"><svg class="ico"><use href="#i-chip"/></svg><span data-i18n="hw.connect">Подключить оборудование</span></button></div>
 <div data-s="error"><b>×</b><span data-i18n="st.error">Критическое исключение</span><button class="btn btn-sm" data-act="crash" data-i18n="st.report">Отчёт для Claude</button></div>
 </template>
 
@@ -73,23 +96,19 @@
 <canvas id="bgCanvas" aria-hidden="true"></canvas>
 <div class="scrim" aria-hidden="true"></div>
 
+<header class="auth-top">
+<span class="at-state"><i class="dot"></i><span data-i18n="core.online">PINN Core Online</span></span>
+<span class="at-sp"></span>
+<button type="button" class="at-btn" id="authPolar" aria-pressed="false" aria-label="Полярная ночь 24/7" title="Полярная ночь 24/7" data-i18n-aria="auth.polar" data-i18n-title="auth.polar"><svg class="ico"><use href="#i-moon"/></svg></button>
+<time id="authClock" class="at-clock" datetime="">UTC+7 00:00:00</time>
+<div class="at-lang" id="authLang" role="group" aria-label="Язык интерфейса" data-i18n-aria="set.lang">
+<button type="button" data-lang="ru" lang="ru" title="Русский" aria-pressed="true">RU</button><button type="button" data-lang="en" lang="en" title="English" aria-pressed="false">EN</button><button type="button" data-lang="zh" lang="zh" title="中文" aria-pressed="false">中文</button><button type="button" data-lang="kk" lang="kk" title="Қазақша" aria-pressed="false">KK</button><button type="button" data-lang="be" lang="be" title="Беларуская" aria-pressed="false">BE</button><button type="button" data-lang="uk" lang="uk" title="Українська" aria-pressed="false">UK</button>
+</div>
+</header>
+
 <div class="stage" id="stage"><div class="dock">
 
 <section class="card glass" id="card" aria-labelledby="authTitle">
-<header class="term">
-<span class="on"><i class="dot"></i>CORE ONLINE</span>
-<span class="path"><b>root@arctic-busbar</b>:<em>~/auth</em>$<i class="cursor"></i></span>
-<time id="authClock" class="clock" datetime="">UTC+7 00:00:00</time>
-<button type="button" class="help" id="helpBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="acctPop" title="Тестовые аккаунты" data-i18n-title="auth.help">[?]</button>
-</header>
-
-<div class="pop" id="acctPop" role="menu" aria-label="Тестовые аккаунты" data-i18n-aria="auth.help" hidden>
-<div class="pop-h"><span data-i18n="auth.pop.h1">users-db.js · тестовые аккаунты</span><span data-i18n="auth.pop.h2">клик = автоподстановка</span></div>
-<button type="button" class="acct" role="menuitem" data-u="eng.rza" data-p="admin123"><b><span data-i18n="role.admin">Главный Инженер РЗА</span><small>Admin</small></b><span>eng.rza · 1073819 · Левицкий А.Р.</span><i>admin123</i></button>
-<button type="button" class="acct" role="menuitem" data-u="disp.smena" data-p="operator123"><b><span data-i18n="role.operator">Диспетчер смены</span><small>Operator</small></b><span>disp.smena · 1073820 · Соколов И.В.</span><i>operator123</i></button>
-<button type="button" class="acct" role="menuitem" data-u="jury.qr" data-p="jury123"><b><span data-i18n="role.jury">Эксперт Жюри</span><small>Observer</small></b><span>jury.qr · 1073821 · <span data-i18n="name.jury">Эксперт Жюри</span></span><i>jury123</i></button>
-</div>
-
 <div class="brand-row">
 <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-bolt"/></svg></span>
 <div class="brand-t"><b>ARCTIC BUSBAR AI<span class="ver">v2.4.0-prod</span></b><span data-i18n="auth.sub">Предиктивная диагностика ошиновки ОРУ 110–220 кВ</span></div>
@@ -102,32 +121,28 @@
 <label for="loginPass"><span data-i18n="auth.pass">Пароль</span>
 <div class="fld"><svg class="ico"><use href="#i-lock"/></svg><input id="loginPass" name="password" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" placeholder="••••••••"><button type="button" class="eye" id="eyeBtn" aria-pressed="false" aria-label="Показать / скрыть пароль" data-i18n-aria="auth.eye"><svg class="ico"><use href="#i-eye"/></svg></button></div></label>
 <div class="msg err" id="authMsg" role="alert" hidden></div>
-<button class="go" id="loginBtn" type="submit"><span data-i18n="auth.login">ВОЙТИ В СИСТЕМУ</span><kbd>⏎</kbd></button>
+<button class="go" id="loginBtn" type="submit"><span data-i18n="auth.login">Войти в систему</span><kbd>⏎</kbd></button>
 </form>
 
 <footer class="foot">
-<button type="button" class="qrbtn" id="qrBtn" aria-expanded="false" aria-controls="drawer" title="Вход по QR-коду для комиссии" data-i18n-title="auth.qr.t"><svg class="ico"><use href="#i-qr"/></svg><span data-i18n="auth.qr">QR жюри</span></button>
+<button type="button" class="qrbtn" id="qrBtn" aria-expanded="false" aria-controls="drawer" title="Вход по QR-коду" data-i18n-title="auth.qr.t"><svg class="ico"><use href="#i-qr"/></svg><span data-i18n="auth.qr">Вход по QR</span></button>
 <button type="button" class="lnk" id="rcvLink" data-i18n="rcv.link">Забыли пароль?</button>
 </footer>
 
 <div class="grant" id="grant" role="status" aria-live="polite" hidden>
-<i class="chk"><svg class="ico"><use href="#i-check"/></svg></i><b>ACCESS GRANTED</b><span id="grantMsg"></span><i class="bar"></i>
+<i class="chk"><svg class="ico"><use href="#i-check"/></svg></i><b data-i18n="auth.granted">Доступ разрешён</b><span id="grantMsg"></span><i class="bar"></i>
 </div>
 </section>
 
-<aside class="drawer glass" id="drawer" data-tab="pc" aria-label="Подключение жюри" data-i18n-aria="qr.panel" aria-hidden="true" inert>
-<header class="term">
-<span class="on"><i class="dot"></i>JURY ACCESS</span>
-<span class="path"><b>jury</b>:<em>~/qr</em>$</span>
-<button type="button" class="help" id="drawerClose" aria-label="Закрыть панель" data-i18n-aria="qr.close">[×]</button>
-</header>
+<aside class="drawer glass" id="drawer" data-tab="pc" aria-label="Вход по QR-коду" data-i18n-aria="qr.panel" aria-hidden="true" inert>
+<header class="mhead"><h2 data-i18n="qr.head">Вход по QR-коду</h2><button type="button" class="x" id="drawerClose" aria-label="Закрыть панель" data-i18n-aria="qr.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
 <div class="dbody">
 <div class="tabs" role="tablist"><i class="tab-ind"></i>
 <button type="button" role="tab" class="on" data-tab="pc" aria-selected="true" data-i18n="qr.pc">На ПК (QR)</button>
 <button type="button" role="tab" data-tab="phone" aria-selected="false" data-i18n="qr.phone">С телефона (ввод кода)</button>
 </div>
 <div class="tp tp-pc" role="tabpanel">
-<div class="qrbox"><canvas id="qrCanvas" data-qr data-size="244" width="244" height="244" role="img" aria-label="QR-код для входа жюри" data-i18n-aria="qr.img"></canvas><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><i class="scan"></i></div>
+<div class="qrbox"><canvas id="qrCanvas" data-qr data-size="244" width="244" height="244" role="img" aria-label="QR-код для входа жюри" data-i18n-aria="qr.img"></canvas></div>
 <div class="code" data-code aria-label="Код доступа" data-i18n-aria="qr.code"><b></b><b></b><b></b><i>•</i><b></b><b></b><b></b></div>
 <div class="timer" title="Обновление кода" data-i18n-title="qr.timer"><i data-qr-timer></i></div>
 <div class="tmeta"><span><span data-i18n="qr.refresh">обновится через</span> <b data-qr-sec>30 с</b></span><span title="Сколько телефонов вошло по коду или QR в этой сессии" data-i18n-title="qr.dev.t"><span data-i18n="qr.dev">Телефонов:</span> <b data-qr-devices>0</b></span></div>
@@ -149,18 +164,13 @@
 
 <div class="modal-wrap" id="rcvModal" hidden>
 <form class="modal glass" id="rcvForm" role="dialog" aria-modal="true" aria-labelledby="rcvTitle" autocomplete="off" novalidate>
-<header class="term">
-<span class="on warn"><i class="dot"></i>PWD RECOVERY</span>
-<span class="path"><b>root@arctic-busbar</b>:<em>~/auth/recover</em>$</span>
-<button type="button" class="help" id="rcvClose" aria-label="Закрыть" data-i18n-aria="common.close">[×]</button>
-</header>
+<header class="mhead"><h2 id="rcvTitle" data-i18n="rcv.title">Восстановление корпоративного доступа</h2><button type="button" class="x" id="rcvClose" aria-label="Закрыть" data-i18n-aria="common.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
 <div class="mbody">
-<h2 id="rcvTitle" data-i18n="rcv.title">Восстановление корпоративного доступа</h2>
 <p class="dim" data-i18n-html="rcv.note">Запрос уйдёт администратору безопасности РЗА. Лимит: <b>1 запрос в 24 часа</b> на аккаунт.</p>
 <label for="rcvUser"><span data-i18n="rcv.field">Введите ваш логин предприятия, табельный код или ФИО</span>
 <div class="fld"><svg class="ico"><use href="#i-user"/></svg><input id="rcvUser" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="eng.rza · 1073819 · Левицкий А.Р."></div></label>
 <div class="msg" id="rcvMsg" role="alert" hidden></div>
-<div class="lim" id="rcvLimit" hidden><svg class="ico"><use href="#i-clock"/></svg><div><span>Повторный запрос возможен через</span><b class="mono" id="rcvTimer">00:00:00</b><i class="timer"><i id="rcvBar"></i></i></div></div>
+<div class="lim" id="rcvLimit" hidden><svg class="ico"><use href="#i-clock"/></svg><div><span data-i18n="rcv.limit">Повторный запрос возможен через</span><b class="mono" id="rcvTimer">00:00:00</b><i class="timer"><i id="rcvBar"></i></i></div></div>
 <div class="sent" id="rcvSent" hidden>
 <div class="ok-h"><svg class="ico"><use href="#i-check"/></svg><span id="rcvReq">Заявка зарегистрирована</span></div>
 <dl class="mono"><dt data-i18n="rcv.to">Кому</dt><dd id="sentTo"></dd><dt data-i18n="rcv.subj">Тема</dt><dd id="sentSubj"></dd><dt data-i18n="rcv.text">Текст</dt><dd id="sentBody"></dd></dl>
@@ -173,7 +183,7 @@
 
 <div id="cam" class="cam-ov" hidden role="dialog" aria-modal="true" aria-label="Сканер QR-кода" data-i18n-aria="cam.title">
 <div class="camwrap glass">
-<header class="term"><span class="on"><i class="dot"></i>CAMERA</span><span class="path"><b>scan</b>:<em>~/qr</em>$<i class="cursor"></i></span><button type="button" class="help" id="camClose" aria-label="Закрыть сканер" data-i18n-aria="cam.close">[×]</button></header>
+<header class="mhead"><h2 data-i18n="cam.title">Сканер QR-кода</h2><button type="button" class="x" id="camClose" aria-label="Закрыть сканер" data-i18n-aria="cam.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
 <div class="camview"><video id="camVideo" playsinline muted></video><div class="reticle"><i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><i class="scan"></i></div></div>
 <div class="msg info" id="camMsg" data-i18n="cam.req">Запрос доступа к камере…</div>
 </div>
@@ -183,40 +193,33 @@
 <!-- ============ APP (отдел 2: styles/app + scripts/app) ============ -->
 <div id="app" data-view="grid">
 
-<!-- Ribbon 48 px -->
+<!-- Ribbon 48 px: сверху 4 раздела, снизу профиль и настройки -->
 <nav id="ribbon" aria-label="Разделы" data-i18n-aria="nav.sections">
-<div class="rb-top">
-<span class="rb-brand" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-bolt"/></svg></span>
-<div class="rb-group" id="rbNav" role="tablist" aria-orientation="vertical"><i id="rbInd"></i>
+<div class="rb-group rb-top" id="rbNav" role="tablist" aria-orientation="vertical"><i id="rbInd"></i>
 <button type="button" class="rb-btn on" data-view="grid" aria-label="Матрица датчиков" data-i18n-aria="nav.grid"><svg class="ico"><use href="#i-grid"/></svg><span class="rb-tip float"><span data-i18n="nav.grid">Матрица датчиков</span><em id="cGrid">4</em><kbd class="key">1</kbd></span></button>
 <button type="button" class="rb-btn" data-view="graph" aria-label="Граф топологии" data-i18n-aria="nav.graph"><svg class="ico"><use href="#i-graph"/></svg><span class="rb-tip float"><span data-i18n="nav.graph">Граф топологии</span><em id="cGraph">12</em><kbd class="key">2</kbd></span></button>
 <button type="button" class="rb-btn" data-view="audit" aria-label="Журнал аудита" data-i18n-aria="nav.audit"><svg class="ico"><use href="#i-audit"/></svg><span class="rb-tip float"><span data-i18n="nav.audit">Журнал аудита</span><em id="cAudit">0</em><kbd class="key">3</kbd></span></button>
 <button type="button" class="rb-btn" data-view="plugins" aria-label="Плагины" data-i18n-aria="nav.plugins"><svg class="ico"><use href="#i-plug"/></svg><span class="rb-tip float"><span data-i18n="nav.plugins">Плагины</span><em id="cPlug">9</em><kbd class="key">4</kbd></span></button>
 </div>
-</div>
 <div class="rb-group rb-bottom">
-<button type="button" class="rb-btn" id="btnCrash" data-act="crash" aria-label="Отчёт для Claude" data-i18n-aria="cr.btn"><svg class="ico"><use href="#i-pulse"/></svg><span class="rb-tip float"><span data-i18n="cr.btn">Отчёт для Claude</span></span></button>
-<button type="button" class="rb-btn" id="btnSettings" data-open="settings" aria-label="Настройки" data-i18n-aria="nav.settings"><svg class="ico"><use href="#i-gear"/></svg><span class="rb-tip float"><span data-i18n="nav.settings">Настройки</span><kbd class="key">,</kbd></span></button>
+<button type="button" class="rb-btn" id="btnSettings" data-open="settings" aria-haspopup="dialog" aria-label="Настройки" data-i18n-aria="nav.settings"><svg class="ico"><use href="#i-gear"/></svg><span class="rb-tip float"><span data-i18n="nav.settings">Настройки</span><kbd class="key">,</kbd></span></button>
 <button type="button" class="rb-btn rb-ava" id="btnProfile" data-open="profile" aria-haspopup="dialog" aria-label="Профиль" data-i18n-aria="nav.profile"><span id="rbAva">—</span><i class="presence"></i><em class="badge-n" id="cPwd" hidden>0</em><span class="rb-tip float"><span data-i18n="nav.profile">Профиль</span><kbd class="key">P</kbd></span></button>
 </div>
 </nav>
 
-<!-- Topbar 48 px -->
+<!-- Статус-бар: сверхтонкое стекло 40 px — раздел слева, метрики по центру, часы справа -->
 <header id="top">
-<span class="m-logo mob-only" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-bolt"/></svg></span>
 <div class="m-status mob-only" id="mStatus"><span class="pt"><i></i><b id="mU">110.2</b><span data-i18n="u.kv">кВ</span></span><span class="pt" id="mTp"><i></i><b id="mT">42.4</b>°C</span><span class="src" id="mSrc" data-s="ok">ВВОД 1</span></div>
-<div class="tb-left">
-<h1 class="sec-title" id="secTitle" data-i18n="nav.grid">Матрица датчиков</h1>
-<span class="core-chip" id="coreStatus" data-s="ok" title="InARCTic Mathematical Stream Active"><i></i><span data-i18n="core.online">PINN Core Online</span></span>
-</div>
-<div class="tb-metrics float" id="metrics" role="group" aria-label="Телеметрия" data-i18n-aria="t.aria">
+<div class="tb-left"><h1 class="sec-title" id="secTitle" data-i18n="nav.grid">Матрица датчиков</h1></div>
+<div class="tb-metrics" id="metrics" role="group" aria-label="Телеметрия" data-i18n-aria="t.aria">
 <span class="mt"><small data-i18n="t.bus">Шина</small><b id="tU">110.2</b><u data-i18n="u.kv">кВ</u></span>
 <span class="mt"><small data-i18n="t.cur">Ток</small><b id="tI">780</b><u data-i18n="u.a">А</u></span>
 <span class="mt"><small data-i18n="t.temp">Стык</small><b id="tT">42.4</b><u>°C</u></span>
-<span class="mt"><small>RUL</small><b id="tRul">70 ч</b></span>
-<span class="mt src" id="tSrcBox" data-s="ok"><b id="tSrc">ВВОД 1</b></span>
+<span class="mt src" id="tSrcBox" data-s="ok"><small data-i18n="t.pwr">Питание</small><b id="tSrc">ВВОД 1</b></span>
+<span class="mt mt-rul"><small>RUL</small><b id="tRul">70 ч</b></span>
 </div>
 <div class="tb-right">
+<button type="button" class="core-chip" id="coreStatus" data-s="ok" data-open="hardware" aria-haspopup="dialog"><i></i><span id="coreLbl" data-i18n="core.online">PINN Core Online</span></button>
 <button type="button" class="btn btn-sm" id="btnDemo" aria-haspopup="menu" aria-expanded="false" aria-controls="demoMenu"><svg class="ico"><use href="#i-flask"/></svg><span data-i18n="demo.btn">Испытания стенда</span><span class="tag-demo">Demo</span><svg class="ico s"><use href="#i-chev"/></svg></button>
 <div class="tb-clock"><b id="tClock">00:00:00</b><span id="tzLabel">UTC+7</span></div>
 </div>
@@ -224,7 +227,7 @@
 <button type="button" class="rb-btn rb-ava m-ava mob-only" id="btnProfileM" data-open="profile" aria-haspopup="dialog" aria-label="Профиль" data-i18n-aria="nav.profile"><span id="mAva">—</span><i class="presence"></i></button>
 </header>
 
-<!-- Меню испытаний стенда -->
+<!-- Меню испытаний стенда (только DEMO_MODE: в боевой сборке app-shell.js удаляет кнопки и это меню из DOM) -->
 <div id="demoMenu" class="float" role="menu" aria-label="Испытания стенда" data-i18n-aria="demo.title" hidden>
 <div class="dm-title" data-i18n="demo.title">Испытания стенда (Demo)</div>
 <button type="button" class="dm-item" role="menuitem" id="demoHeat" data-k="heat"><svg class="ico"><use href="#i-thermo"/></svg><b data-i18n="demo.heat">Нагрев болтового стыка</b><span data-i18n="demo.heat.d">Плавный рост до 85 °C, RUL 15 мин, авария и АВР на Ввод 2</span></button>
@@ -270,7 +273,7 @@
 <div class="gp-row"><span><span data-i18n="g.len">Длина связей</span><output id="gLenV">150</output></span><input id="gLen" type="range" min="40" max="240" value="150" aria-label="Длина связей" data-i18n-aria="g.len"></div>
 <div class="gp-row"><span><span data-i18n="g.flow">Скорость потока</span><output id="gFlowV">50</output></span><input id="gFlow" type="range" min="0" max="100" value="50" aria-label="Скорость потока" data-i18n-aria="g.flow"></div>
 </div>
-<div class="gp-btns"><button type="button" class="btn btn-sm" id="gFit"><svg class="ico"><use href="#i-fit"/></svg><span data-i18n="g.fit">Вписать в экран</span></button><button type="button" class="btn btn-sm" id="gPin" aria-pressed="false"><svg class="ico"><use href="#i-pin"/></svg><span id="gPinT" data-i18n="g.pin">Закрепить все</span></button></div>
+<div class="gp-btns"><button type="button" class="btn btn-sm" id="gFit"><svg class="ico"><use href="#i-fit"/></svg><span data-i18n="g.fit">Вписать в экран</span></button><button type="button" class="btn btn-sm" id="gPin" aria-pressed="false"><svg class="ico"><use href="#i-pin"/></svg><span id="gPinT" data-i18n="g.pin">Закрепить все</span></button><button type="button" class="btn btn-sm" id="gReset"><svg class="ico"><use href="#i-reset"/></svg><span data-i18n="g.reset">Сбросить раскладку</span></button></div>
 </div>
 </div>
 <div class="glegend float"><span><i></i><span data-i18n="g.l.pw">Питание</span></span><span><i class="rs"></i><span data-i18n="g.l.rs">Резерв / LTO / ДГУ</span></span><span><i class="tl"></i><span data-i18n="g.l.tl">Телеметрия</span></span></div>
@@ -341,21 +344,24 @@
 <div><span data-i18n="pf.id">Табельный ID</span><b id="empId">—</b></div>
 <div><span data-i18n="pf.login">Логин</span><b id="empLogin">—</b></div>
 <div><span data-i18n="pf.sess">Сессия</span><b id="empSess">00:00:00</b></div>
+<div><span data-i18n="pf.left">До автовыхода</span><b id="empLeft">—</b></div>
 <div><span data-i18n="pf.via">Способ входа</span><b id="empVia">—</b></div>
 </div>
 <div class="pf-cfg-l"><span class="lbl" data-i18n="pf.cfg">Строка профиля</span><div class="pf-cfg"><span class="mono" id="cfgString">—</span><button type="button" class="btn btn-ghost btn-sm btn-ic" id="cfgCopy" aria-label="Копировать" data-i18n-aria="common.copy"><svg class="ico"><use href="#i-copy"/></svg></button></div></div>
 <div class="pf-mine"><span class="lbl" data-i18n="pf.mine">Мои права доступа</span><ul class="pf-perms" id="pfPerms"></ul></div>
 </section>
-<section class="surf pf-card">
-<h3 data-i18n="pf.qr.title">Быстрый вход в этот профиль по QR / PIN с телефона</h3>
-<p data-i18n="pf.qr.hint">Наведите камеру телефона на QR-код или введите 6 цифр на экране входа — телефон войдёт в этот же аккаунт. Код обновляется каждые 30 секунд.</p>
-<div class="pf-qr">
+<section class="surf pf-card" id="pfPhoneCard">
+<h3 data-i18n="pf.ph.title">Подключить телефон</h3>
+<p data-i18n="pf.ph.hint">Нажмите кнопку: появится личный QR-код и 6-значный PIN. Наведите камеру телефона на QR или введите PIN на экране входа — телефон сразу войдёт в этот аккаунт. Код действует 90 секунд и срабатывает один раз.</p>
+<button type="button" class="btn btn-pri" id="pfPhone"><svg class="ico"><use href="#i-phone"/></svg><span data-i18n="pf.ph.btn">Подключить телефон</span></button>
+<div class="pf-qr" id="pfQrWrap" hidden>
 <div class="pf-qrbox"><canvas id="pfQr" width="176" height="176" role="img" aria-label="QR-код для входа в этот профиль" data-i18n-aria="pf.qr.img"></canvas></div>
 <div class="pf-pin" id="pfPin" aria-label="PIN"><b></b><b></b><b></b><i>·</i><b></b><b></b><b></b></div>
 <div class="pf-timer"><i id="pfTimerBar"></i></div>
-<div class="pf-tmeta"><span><span data-i18n="qr.refresh">обновится через</span> <b class="mono" id="pfSec">30 с</b></span></div>
+<div class="pf-tmeta"><span><span data-i18n="pf.ph.left">действует ещё</span> <b class="mono" id="pfSec">90 с</b></span><button type="button" class="btn btn-ghost btn-sm" id="pfPhoneOff" data-i18n="pf.ph.off">Отозвать код</button></div>
 <button type="button" class="pf-link" id="pfLink" title="Копировать ссылку" data-i18n-title="qr.url"><span id="pfUrl"></span><svg class="ico"><use href="#i-copy"/></svg></button>
 </div>
+<p class="pf-ph-done" id="pfPhoneDone" hidden><svg class="ico"><use href="#i-check"/></svg><span data-i18n="pf.ph.done">Код использован или отозван. Нажмите кнопку ещё раз, чтобы получить новый.</span></p>
 </section>
 </div>
 <div class="pf-out"><p data-i18n="pf.out.note">Сессия будет завершена, откроется экран входа.</p><button type="button" class="btn btn-err" id="btnLogout"><svg class="ico"><use href="#i-power"/></svg><span data-i18n="pf.logout">Выйти из аккаунта</span></button></div>
@@ -375,21 +381,22 @@
 </section>
 </div>
 
-<!-- ===== Окно: Настройки (Obsidian Settings) ===== -->
+<!-- ===== Окно: Настройки (в духе Obsidian: вкладки слева, содержимое справа) ===== -->
 <div class="wnd-wrap" id="mSettings" hidden>
 <section class="wnd st full float" role="dialog" aria-modal="true" aria-labelledby="stTitle">
 <header class="wnd-head"><div><h2 id="stTitle" data-i18n="set.title">Настройки</h2></div><button type="button" class="btn btn-ghost btn-sm btn-ic" data-close aria-label="Закрыть" data-i18n-aria="common.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
 <div class="st-layout">
 <nav class="st-nav" role="tablist" aria-orientation="vertical">
-<button type="button" class="on" role="tab" data-cat="ui" aria-selected="true"><svg class="ico"><use href="#i-palette"/></svg><span data-i18n="set.c.ui">Интерфейс и тема</span></button>
+<button type="button" class="on" role="tab" data-cat="ui" aria-selected="true"><svg class="ico"><use href="#i-palette"/></svg><span data-i18n="set.c.ui">Интерфейс</span></button>
 <button type="button" role="tab" data-cat="lang" aria-selected="false"><svg class="ico"><use href="#i-globe"/></svg><span data-i18n="set.c.lang">Язык и регион</span></button>
-<button type="button" role="tab" data-cat="perf" aria-selected="false"><svg class="ico"><use href="#i-gauge"/></svg><span data-i18n="set.c.perf">Производительность и анимации</span></button>
+<button type="button" role="tab" data-cat="perf" aria-selected="false"><svg class="ico"><use href="#i-gauge"/></svg><span data-i18n="set.c.perf">Производительность</span></button>
+<button type="button" role="tab" data-cat="hw" aria-selected="false"><svg class="ico"><use href="#i-chip"/></svg><span data-i18n="set.c.hw">Оборудование</span></button>
 <button type="button" role="tab" data-cat="db" aria-selected="false"><svg class="ico"><use href="#i-db"/></svg><span data-i18n="set.c.db">База данных и бэкап</span></button>
 </nav>
 <div class="st-main">
 
 <section class="st-pane on" data-pane="ui" role="tabpanel">
-<h3 data-i18n="set.c.ui">Интерфейс и тема</h3>
+<h3 data-i18n="set.c.ui">Интерфейс</h3>
 <div class="st-card surf">
 <div class="st-row"><div><b data-i18n="set.theme">Тема оформления</b><span class="d" data-i18n="set.theme.d">Применяется сразу, без перезагрузки.</span></div></div>
 <div class="theme-grid" id="themeGrid">
@@ -397,6 +404,17 @@
 <button type="button" class="theme-card" data-theme="amber" aria-pressed="false"><span class="th-prev" data-t="amber"><i></i><i></i></span><b data-i18n="th.amber">Amber Industrial</b></button>
 <button type="button" class="theme-card" data-theme="light" aria-pressed="false"><span class="th-prev" data-t="light"><i></i><i></i></span><b data-i18n="th.light">Light Engineering</b></button>
 </div>
+<div class="st-sep"></div>
+<div class="st-row"><div><b data-i18n="set.bg">Фон рабочей области</b><span class="d" data-i18n="set.bg.d">Градиенты и мягкие волнистые узоры вместо плоской заливки. Цвета следуют теме и акценту.</span></div></div>
+<div class="bg-grid" id="bgGrid">
+<button type="button" class="bg-card" data-bg="waves" aria-pressed="true"><span class="bg-prev" data-b="waves"></span><b data-i18n="bg.waves">Волны</b></button>
+<button type="button" class="bg-card" data-bg="aurora" aria-pressed="false"><span class="bg-prev" data-b="aurora"></span><b data-i18n="bg.aurora">Сияние</b></button>
+<button type="button" class="bg-card" data-bg="contour" aria-pressed="false"><span class="bg-prev" data-b="contour"></span><b data-i18n="bg.contour">Изолинии</b></button>
+<button type="button" class="bg-card" data-bg="mesh" aria-pressed="false"><span class="bg-prev" data-b="mesh"></span><b data-i18n="bg.mesh">Градиент</b></button>
+<button type="button" class="bg-card" data-bg="plain" aria-pressed="false"><span class="bg-prev" data-b="plain"></span><b data-i18n="bg.plain">Однотонный</b></button>
+</div>
+<div class="st-sep"></div>
+<div class="st-row"><div><b data-i18n="set.polar">Полярная ночь 24/7</b><span class="d" data-i18n="set.polar.d">Глубокие сумерки, плотная пурга и северное сияние: на экране входа и в фоне рабочей области.</span></div><label class="sw"><input type="checkbox" id="chkPolar"><i></i></label></div>
 <div class="st-sep"></div>
 <div class="st-row"><div><b data-i18n="set.accent">Акцентный цвет</b><span class="d" data-i18n="set.accent.d">Меняет переменную --acc: кнопки, активные элементы, графики.</span></div></div>
 <div class="acc-row" id="accRow">
@@ -434,7 +452,7 @@
 </section>
 
 <section class="st-pane" data-pane="perf" role="tabpanel">
-<h3 data-i18n="set.c.perf">Производительность и анимации</h3>
+<h3 data-i18n="set.c.perf">Производительность</h3>
 <div class="st-card surf">
 <div class="st-row"><div><b data-i18n="set.anim">Плавные анимации и параллакс</b><span class="d" data-i18n="set.anim.d">Снимите для режима энергосбережения: отключаются переходы, пульсации и параллакс на экране входа.</span></div><label class="sw"><input type="checkbox" id="chkAnim" checked><i></i></label></div>
 <div class="st-sep"></div>
@@ -444,19 +462,188 @@
 </div>
 </section>
 
+<section class="st-pane" data-pane="hw" role="tabpanel">
+<h3 data-i18n="set.c.hw">Оборудование</h3>
+<div class="st-card surf">
+<div class="st-row"><div><b data-i18n="hw.src">Источник данных</b><span class="d" id="hwSrcNote">—</span></div><span class="pill" id="hwSrcPill">—</span></div>
+<div class="st-sep"></div>
+<div class="st-row"><div><b data-i18n="hw.title">Подключение оборудования</b><span class="d" data-i18n="hw.set.d">ESP32 по USB (Web Serial) или шлюз FastAPI по WebSocket, поиск устройств COM и I²C, инструкция для инженеров.</span></div><button type="button" class="btn" id="btnHwOpen" data-open="hardware"><svg class="ico"><use href="#i-chip"/></svg><span data-i18n="hw.open">Открыть</span></button></div>
+</div>
+</section>
+
 <section class="st-pane" data-pane="db" role="tabpanel">
 <h3 data-i18n="set.c.db">База данных и бэкап</h3>
 <div class="st-card surf">
-<div class="st-row"><div><b data-i18n="set.exp">Экспорт бэкапа</b><span class="d" data-i18n="set.exp.d">Настройки, журнал аудита, уставки, плагины и заявки одним .json-файлом. Временные пароли не экспортируются.</span></div><button type="button" class="btn" id="btnBackup"><svg class="ico"><use href="#i-download"/></svg><span data-i18n="set.exp.b">Экспорт бэкапа (.json)</span></button></div>
+<div class="st-row"><div><b data-i18n="set.exp">Экспорт бэкапа</b><span class="d" data-i18n="set.exp.d">Настройки, журнал аудита, уставки, плагины и заявки одним .json-файлом. Пароли, токены и права доступа не экспортируются.</span></div><button type="button" class="btn" id="btnBackup"><svg class="ico"><use href="#i-download"/></svg><span data-i18n="set.exp.b">Экспорт бэкапа (.json)</span></button></div>
 <div class="st-sep"></div>
-<div class="st-row"><div><b data-i18n="set.imp">Восстановление</b><span class="d" data-i18n="set.imp.d">Загрузите ранее сохранённый .json — данные заменят текущие.</span></div><button type="button" class="btn" id="btnRestore"><svg class="ico"><use href="#i-upload"/></svg><span data-i18n="set.imp.b">Восстановление из бэкапа</span></button></div>
+<div class="st-row"><div><b data-i18n="set.imp">Восстановление</b><span class="d" data-i18n="set.imp.d">Загрузите ранее сохранённый .json — данные заменят текущие. Разделы применяются только при наличии права в вашей сессии.</span></div><button type="button" class="btn" id="btnRestore"><svg class="ico"><use href="#i-upload"/></svg><span data-i18n="set.imp.b">Восстановление из бэкапа</span></button></div>
+<div id="rowReset"><div class="st-sep"></div>
+<div class="st-row"><div><b data-i18n="set.rst">Демо-данные</b><span class="d" data-i18n="set.rst.d">Вернуть журнал, уставки и плагины к исходному демо-состоянию.</span></div><button type="button" class="btn btn-err" id="btnResetDemo"><svg class="ico"><use href="#i-reset"/></svg><span data-i18n="set.rst.b">Сбросить</span></button></div></div>
 <div class="st-sep"></div>
-<div class="st-row"><div><b data-i18n="set.rst">Демо-данные</b><span class="d" data-i18n="set.rst.d">Вернуть журнал, уставки и плагины к исходному демо-состоянию.</span></div><button type="button" class="btn btn-err" id="btnResetDemo"><svg class="ico"><use href="#i-reset"/></svg><span data-i18n="set.rst.b">Сбросить</span></button></div>
+<div class="st-row"><div><b data-i18n="cr.title">Диагностика: отчёт для Claude</b><span class="d" data-i18n="set.diag.d">Профиль, стек ошибки и последние пакеты телеметрии одним текстом.</span></div><button type="button" class="btn" id="btnCrash" data-act="crash"><svg class="ico"><use href="#i-pulse"/></svg><span data-i18n="cr.btn">Отчёт для Claude</span></button></div>
 </div>
 <div class="st-card surf"><div class="st-stat" id="dbStat"></div></div>
 </section>
 
 </div>
+</div>
+</section>
+</div>
+
+<!-- ===== Окно: Подключение оборудования (Web Serial / WebSocket-шлюз) ===== -->
+<div class="wnd-wrap" id="mHardware" hidden>
+<section class="wnd lg float hw" role="dialog" aria-modal="true" aria-labelledby="hwTitle">
+<header class="wnd-head"><div><h2 id="hwTitle" data-i18n="hw.title">Подключение оборудования</h2><p class="mono" id="hwSub" data-i18n="hw.sub">Система ждёт реальные данные: ESP32 по USB или шлюз FastAPI.</p></div><button type="button" class="btn btn-ghost btn-sm btn-ic" data-close aria-label="Закрыть" data-i18n-aria="common.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
+<nav class="wnd-tabs" role="tablist">
+<button type="button" class="wnd-tab on" role="tab" data-tab="link" aria-selected="true"><span data-i18n="hw.tab1">Подключение</span></button>
+<button type="button" class="wnd-tab" role="tab" data-tab="guide" aria-selected="false"><span data-i18n="hw.tab2">Инструкция для инженеров</span></button>
+</nav>
+<div class="wnd-body">
+
+<div class="wnd-pane on" data-pane="link" role="tabpanel">
+<div class="hw-status surf" id="hwStatus" data-s="idle">
+<i class="hw-dot"></i>
+<div class="hw-st-t"><b id="hwStateT" data-i18n="hw.s.idle">Нет подключения</b><span id="hwStateD" data-i18n="hw.s.idle.d">Датчики в состоянии OFFLINE, значения не показываются.</span></div>
+<button type="button" class="btn btn-sm" id="hwOff" hidden><svg class="ico"><use href="#i-power"/></svg><span data-i18n="hw.off">Отключить</span></button>
+</div>
+
+<div class="hw-actions">
+<button type="button" class="btn btn-pri" id="hwScan"><svg class="ico"><use href="#i-radar"/></svg><span data-i18n="hw.scan">Поиск устройств COM / I²C</span></button>
+<label class="hw-baud"><span data-i18n="hw.baud">Скорость</span><select class="inp" id="hwBaud" aria-label="Скорость порта" data-i18n-aria="hw.baud"><option>9600</option><option>57600</option><option selected>115200</option><option>230400</option><option>460800</option></select></label>
+</div>
+<p class="notice" id="hwNoSerial" hidden><svg class="ico"><use href="#i-warn"/></svg><span data-i18n="hw.nosr">Этот браузер не поддерживает Web Serial. Откройте систему в Chrome или Edge (адрес https:// или localhost) либо подключитесь через шлюз FastAPI ниже.</span></p>
+
+<div class="hw-sec"><h4 data-i18n="hw.dev.h">Найденные устройства</h4>
+<div class="hw-list" id="hwDevices"></div>
+<p class="hw-empty" id="hwDevNone" data-i18n="hw.dev.none">Пока ничего не найдено. Подключите ESP32 кабелем USB и нажмите «Поиск устройств».</p>
+</div>
+
+<div class="hw-sec" id="hwI2cSec" hidden><h4 data-i18n="hw.i2c.h">Устройства на шине I²C</h4>
+<div class="hw-list" id="hwI2c"></div>
+</div>
+
+<div class="hw-sec"><h4 data-i18n="hw.ws.h">Шлюз FastAPI (WebSocket)</h4>
+<form class="hw-ws" id="hwWsForm" novalidate>
+<input class="inp mono" id="hwWsUrl" type="text" inputmode="url" spellcheck="false" autocomplete="off" aria-label="Адрес шлюза" data-i18n-aria="hw.ws.h" placeholder="ws://127.0.0.1:8765/ws">
+<button type="submit" class="btn" id="hwWsGo"><svg class="ico"><use href="#i-link"/></svg><span data-i18n="hw.ws.btn">Подключиться</span></button>
+</form>
+</div>
+
+<div class="hw-sec"><h4 data-i18n="hw.live.h">Последний пакет</h4>
+<div class="hw-live" id="hwLive">
+<span><small>T</small><b data-k="T">—</b><u>°C</u></span><span><small>Tamb</small><b data-k="Ta">—</b><u>°C</u></span><span><small>I</small><b data-k="I">—</b><u>A</u></span><span><small>U</small><b data-k="U">—</b><u data-i18n="u.kv">кВ</u></span><span><small>a</small><b data-k="acc">—</b><u>g</u></span>
+</div>
+<pre class="pre-box hw-log" id="hwLog" aria-live="off"></pre>
+</div>
+<div class="cb-err" id="hwErr" role="alert"></div>
+</div>
+
+<div class="wnd-pane" data-pane="guide" role="tabpanel">
+<div class="hw-guide">
+<p class="hw-lead" data-i18n="hw.g.lead">Пять шагов от пустого ESP32 до живых данных в матрице датчиков. Все значения приходят строками JSON по USB (Web Serial) или через шлюз FastAPI.</p>
+
+<article class="hg-step"><span class="hg-n">1</span><div>
+<h4 data-i18n="hw.g1.h">Что понадобится</h4>
+<ul class="hg-chips"><li>ESP32 DevKit (3,3 В)</li><li>MLX90614 · I²C 0x5A</li><li>INA219 · I²C 0x40</li><li>MPU6050 · I²C 0x68</li><li data-i18n="hw.g1.usb">USB-кабель с передачей данных</li></ul>
+</div></article>
+
+<article class="hg-step"><span class="hg-n">2</span><div>
+<h4 data-i18n="hw.g2.h">Схема подключения: одна общая шина I²C</h4>
+<div class="hg-twrap"><table class="hg-table">
+<thead><tr><th data-i18n="hw.g2.sig">Сигнал</th><th>ESP32</th><th>MLX90614</th><th>INA219</th><th>MPU6050</th></tr></thead>
+<tbody>
+<tr><td>3V3</td><td>3V3</td><td>VIN</td><td>VCC</td><td>VCC</td></tr>
+<tr><td>GND</td><td>GND</td><td>GND</td><td>GND</td><td>GND</td></tr>
+<tr><td>SDA</td><td>GPIO 21</td><td>SDA</td><td>SDA</td><td>SDA</td></tr>
+<tr><td>SCL</td><td>GPIO 22</td><td>SCL</td><td>SCL</td><td>SCL</td></tr>
+<tr><td data-i18n="hw.g2.meas">Измерение</td><td>—</td><td data-i18n="hw.g2.ir">ИК-точка на болтовом стыке</td><td>VIN+ / VIN− <span data-i18n="hw.g2.ct">во вторичную цепь ТТ</span></td><td data-i18n="hw.g2.vib">на корпусе шинодержателя</td></tr>
+</tbody></table></div>
+<p class="hg-warn"><svg class="ico"><use href="#i-warn"/></svg><span data-i18n="hw.g2.warn">Датчики подключаются только ко вторичным цепям (ТТ 1–5 А) и к корпусу оборудования. К первичной цепи 110–220 кВ не подключать.</span></p>
+</div></article>
+
+<article class="hg-step"><span class="hg-n">3</span><div>
+<h4 data-i18n="hw.g3.h">Прошивка и протокол</h4>
+<p data-i18n="hw.g3.p">ESP32 отправляет по одной JSON-строке 4 раза в секунду (115200 бод) и отвечает на команду i2c_scan:</p>
+<pre class="code"><code>// ESP32 → браузер (по строке на пакет)
+{"t":42.4,"ta":-24.1,"i":780,"u":110.2,"acc":0.12}
+
+// браузер → ESP32  (кнопка «Поиск устройств COM / I²C»)
+{"cmd":"i2c_scan"}
+// ESP32 → браузер: найденные адреса в десятичном виде
+{"i2c":[90,64,104]}</code></pre>
+<div class="hg-twrap"><table class="hg-table hg-keys"><thead><tr><th data-i18n="hw.g3.key">Поле</th><th data-i18n="hw.g3.mean">Что означает</th></tr></thead><tbody>
+<tr><td class="mono">t</td><td data-i18n="hw.g3.t">температура болтового стыка, °C (MLX90614)</td></tr>
+<tr><td class="mono">ta</td><td data-i18n="hw.g3.ta">температура воздуха, °C</td></tr>
+<tr><td class="mono">i</td><td data-i18n="hw.g3.i">ток линии, А (INA219 × коэффициент ТТ)</td></tr>
+<tr><td class="mono">u</td><td data-i18n="hw.g3.u">напряжение шины, кВ (необязательно: от ТН или шлюза МЭК 61850)</td></tr>
+<tr><td class="mono">acc</td><td data-i18n="hw.g3.acc">вибрация, g (MPU6050)</td></tr>
+</tbody></table></div>
+<pre class="code"><code>// Arduino IDE: Adafruit MLX90614 / INA219 / MPU6050 + Wire
+const float CT_RATIO = 240.0;            // ТТ 1200 А : 5 А
+void loop() {
+  if (Serial.available() &amp;&amp; Serial.readStringUntil('\n').indexOf("i2c_scan") &gt;= 0) scanI2C();
+  float amps = ina.getCurrent_mA() / 1000.0 * CT_RATIO;
+  Serial.printf("{\"t\":%.1f,\"ta\":%.1f,\"i\":%.0f,\"acc\":%.2f}\n",
+                mlx.readObjectTempC(), mlx.readAmbientTempC(), amps, vibrationG());
+  delay(250);
+}</code></pre>
+</div></article>
+
+<article class="hg-step"><span class="hg-n">4</span><div>
+<h4 data-i18n="hw.g4.h">Подключение из браузера (Web Serial)</h4>
+<ol class="hg-list">
+<li data-i18n="hw.g4.a">Откройте систему в Chrome или Edge по адресу https:// или http://localhost.</li>
+<li data-i18n="hw.g4.b">Нажмите «Поиск устройств COM / I²C» и выберите порт ESP32 (CP210x / CH340).</li>
+<li data-i18n="hw.g4.c">Статус станет «На связи», матрица датчиков заполнится данными. Если пакетов нет 5 секунд, датчики снова уйдут в OFFLINE.</li>
+<li data-i18n="hw.g4.d">Windows: драйвер CP210x или CH340. Linux: добавьте пользователя в группу dialout.</li>
+</ol>
+</div></article>
+
+<article class="hg-step"><span class="hg-n">5</span><div>
+<h4 data-i18n="hw.g5.h">Шлюз FastAPI (Python, WebSocket)</h4>
+<p data-i18n="hw.g5.p">Для работы без Web Serial и для нескольких рабочих мест: шлюз читает COM-порт и рассылает строки JSON по WebSocket.</p>
+<pre class="code"><code># pip install fastapi uvicorn pyserial
+# uvicorn gateway:app --host 127.0.0.1 --port 8765
+import asyncio, threading, serial
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, WebSocket
+
+PORT, BAUD = "/dev/ttyUSB0", 115200        # Windows: "COM3"
+clients, loop = set(), None
+
+def reader():
+    with serial.Serial(PORT, BAUD, timeout=1) as ser:
+        while True:
+            line = ser.readline().decode("utf-8", "ignore").strip()
+            if line.startswith("{"):
+                asyncio.run_coroutine_threadsafe(fan_out(line), loop)
+
+async def fan_out(line):
+    for ws in list(clients):
+        try: await ws.send_text(line)
+        except Exception: clients.discard(ws)
+
+@asynccontextmanager
+async def lifespan(app):
+    global loop
+    loop = asyncio.get_running_loop()
+    threading.Thread(target=reader, daemon=True).start()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+@app.websocket("/ws")
+async def ws_endpoint(ws: WebSocket):
+    # Production: check ws.headers.get("origin") and require a token
+    await ws.accept(); clients.add(ws)
+    try:
+        while True: await ws.receive_text()
+    except Exception: clients.discard(ws)</code></pre>
+<p data-i18n="hw.g5.q">Затем введите адрес ws://127.0.0.1:8765/ws в поле «Шлюз FastAPI» на вкладке «Подключение».</p>
+</div></article>
+</div>
+</div>
+
 </div>
 </section>
 </div>
@@ -476,19 +663,42 @@
 </form>
 </div>
 
-<!-- ===== Редактор плагина ===== -->
+<!-- ===== Добавление плагина: папка (имитация загрузки директории) или один файл ===== -->
 <div class="wnd-wrap" id="mPlugin" hidden>
-<section class="wnd md float" role="dialog" aria-modal="true" aria-labelledby="plTitle">
-<header class="wnd-head"><div><h2 id="plTitle" data-i18n="p.new">Редактор плагина</h2><p class="mono" id="plSub"></p></div><button type="button" class="btn btn-ghost btn-sm btn-ic" data-close aria-label="Закрыть" data-i18n-aria="common.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
-<div class="wnd-body"><div class="form-grid">
+<section class="wnd lg float" role="dialog" aria-modal="true" aria-labelledby="plTitle">
+<header class="wnd-head"><div><h2 id="plTitle" data-i18n="p.new">Добавить плагин</h2><p class="mono" id="plSub"></p></div><button type="button" class="btn btn-ghost btn-sm btn-ic" data-close aria-label="Закрыть" data-i18n-aria="common.close"><svg class="ico"><use href="#i-x"/></svg></button></header>
+<nav class="wnd-tabs" role="tablist" id="plTabs">
+<button type="button" class="wnd-tab on" role="tab" data-tab="dir" aria-selected="true"><span data-i18n="pk.tab.dir">Папка плагина</span></button>
+<button type="button" class="wnd-tab" role="tab" data-tab="code" aria-selected="false"><span data-i18n="pk.tab.code">Один файл (код)</span></button>
+</nav>
+<div class="wnd-body">
+
+<div class="wnd-pane on" data-pane="dir" role="tabpanel">
+<div class="pk-drop" id="pkDrop" tabindex="0" role="button" aria-label="Перетащите папку плагина" data-i18n-aria="pk.drop">
+<svg class="ico l"><use href="#i-folder"/></svg>
+<b data-i18n="pk.drop">Перетащите папку плагина сюда</b>
+<span data-i18n="pk.drop.d">Внутри: manifest.json и точка входа worker.js (JavaScript) или worker.py (Python)</span>
+<div class="pk-btns"><button type="button" class="btn btn-sm" id="pkPick"><svg class="ico"><use href="#i-folder"/></svg><span data-i18n="pk.pick">Выбрать папку…</span></button><button type="button" class="btn btn-sm" id="pkSampleJs"><svg class="ico"><use href="#i-code"/></svg><span data-i18n="pk.sample.js">Пример на JavaScript</span></button><button type="button" class="btn btn-sm" id="pkSamplePy"><svg class="ico"><use href="#i-code"/></svg><span data-i18n="pk.sample.py">Пример на Python</span></button></div>
+<input type="file" id="pkInput" webkitdirectory multiple hidden>
+</div>
+<div class="pk-res" id="pkRes" hidden>
+<div class="pk-head"><b id="pkName" class="mono">—</b><span class="pill" id="pkRt">js</span><span class="pill" id="pkVer">0.1.0</span><span class="pk-size mono" id="pkSize"></span></div>
+<ul class="pk-tree mono" id="pkTree"></ul>
+<ul class="pk-issues" id="pkIssues"></ul>
+</div>
+</div>
+
+<div class="wnd-pane" data-pane="code" role="tabpanel"><div class="form-grid">
 <div class="field" id="plNameF"><label class="lbl" for="plName" data-i18n="p.name">Идентификатор</label><input class="inp mono" id="plName" placeholder="CUSTOM-PLUGIN-01" spellcheck="false" autocomplete="off"></div>
 <div class="field" id="plLangF"><label class="lbl" for="plLang" data-i18n="p.lang">Язык</label><select class="inp" id="plLang"><option value="js" data-i18n="p.lang.js">JavaScript (выполняется в браузере)</option><option value="py" data-i18n="p.lang.py">Python (Phase 2, сервер FastAPI)</option></select></div>
 <div class="field"><label class="lbl" for="plParams" data-i18n="p.params">Параметры (JSON)</label><textarea class="inp mono" id="plParams" rows="3" spellcheck="false">{"threshold": 85, "enabled": true}</textarea></div>
 <div class="field" id="plCodeF"><label class="lbl" for="plCode" data-i18n="p.code">Код</label><textarea class="inp pl-code" id="plCode" rows="8" spellcheck="false">// plugin.packet: {temp, cur, volt, vib, vdc}; plugin.params — параметры; вернуть {alarm: boolean, note?: string}
 return { alarm: plugin.packet.temp > plugin.params.threshold };</textarea></div>
-<div class="notice" id="plNote"><svg class="ico"><use href="#i-info"/></svg><span data-i18n="p.note.js">JS-плагин выполняется каждый цикл телеметрии в этой вкладке (демо-режим, не песочница безопасности).</span></div>
-<div class="cb-err" id="plErr" role="alert"></div>
 </div></div>
+
+<div class="notice" id="plNote"><svg class="ico"><use href="#i-info"/></svg><span data-i18n="p.note.js">JS-плагин выполняется в изолированном Web Worker: без доступа к сети, хранилищу, DOM и сессии. Python-плагины сохраняются и ждут серверной фазы 2.</span></div>
+<div class="cb-err" id="plErr" role="alert"></div>
+</div>
 <footer class="wnd-foot"><button type="button" class="btn" data-close data-i18n="common.cancel">Отмена</button><button type="button" class="btn btn-pri" id="plSave" data-i18n="p.save">Внедрить</button></footer>
 </section>
 </div>
@@ -502,7 +712,7 @@ return { alarm: plugin.packet.temp > plugin.params.threshold };</textarea></div>
 <div class="field"><span class="lbl">Stack trace</span><pre class="pre-box" id="crashStack"></pre></div>
 <div class="field"><span class="lbl" data-i18n="cr.pk">Последние 5 пакетов телеметрии</span><pre class="pre-box" id="crashPackets"></pre></div>
 </div></div>
-<footer class="wnd-foot"><button type="button" class="btn" data-close data-i18n="common.close">Закрыть</button><button type="button" class="btn btn-pri" id="crashCopy"><svg class="ico"><use href="#i-copy"/></svg><span data-i18n="cr.copy">Скопировать промт ошибки для Claude</span></button></div>
+<footer class="wnd-foot"><button type="button" class="btn" data-close data-i18n="common.close">Закрыть</button><button type="button" class="btn btn-pri" id="crashCopy"><svg class="ico"><use href="#i-copy"/></svg><span data-i18n="cr.copy">Скопировать промт ошибки для Claude</span></button></footer>
 </section>
 </div>
 
@@ -510,19 +720,28 @@ return { alarm: plugin.packet.temp > plugin.params.threshold };</textarea></div>
 <input id="fileRestore" type="file" accept=".json,application/json" hidden>
 </div>
 
-<!-- ============ СКРИПТЫ ============ Порядок важен: core → auth → app -->
+<!-- ============ СКРИПТЫ ============ Порядок важен: core → auth → app.
+     config.js — единственное место, где включается DEMO_MODE; demo-data.js (открытые демо-пароли для меню [?]) в боевой поставке удаляется целиком. -->
+<script src="scripts/core/config.js"></script>
+<script src="scripts/core/crypto-lite.js"></script>
 <script src="scripts/core/users-db.js"></script>
 <script src="scripts/core/i18n.js"></script>
 <script src="scripts/core/store.js"></script>
+<script src="scripts/core/demo-data.js"></script>
 <script src="scripts/auth/qr-encoder.js"></script>
 <script src="scripts/auth/qr-jury.js"></script>
 <script src="scripts/auth/frost-scene.js"></script>
 <script src="scripts/auth/frost-drops.js"></script>
 <script src="scripts/auth/frost-canvas.js"></script>
 <script src="scripts/auth/auth.js"></script>
+<script src="scripts/app/hardware-link.js"></script>
+<script src="scripts/app/plugin-pack.js"></script>
+<script src="scripts/app/plugin-host.js"></script>
 <script src="scripts/app/pinn-simulator.js"></script>
 <script src="scripts/app/obsidian-graph.js"></script>
 <script src="scripts/app/scada-ui.js"></script>
+<script src="scripts/app/plugin-ui.js"></script>
+<script src="scripts/app/hardware-ui.js"></script>
 <script src="scripts/app/app-shell.js"></script>
 </body>
 </html>

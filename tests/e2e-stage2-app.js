@@ -1,6 +1,6 @@
 /* ARCTIC BUSBAR AI v2.4.0-prod: tests/e2e-stage2-app.js
-   Набор ЭТАПА 2 — внутренний интерфейс #app: каркас (Ribbon / Topbar / Workspace / Inspector), матрица датчиков, граф Obsidian,
-   три демо-сценария, журнал аудита с откатом, плагины, окно «Профиль» (QR/PIN, RBAC, заявки), окно «Настройки» (темы, акцент, 6 языков, бэкап),
+   Набор ЭТАПА 2 (адаптирован под этап 3) — внутренний интерфейс #app: каркас (Ribbon / статус-бар / Workspace / Inspector), матрица датчиков, граф Obsidian,
+   три демо-сценария, журнал аудита с откатом, плагины, окно «Профиль» («Подключить телефон»: личный QR-токен и PIN по нажатию, RBAC, заявки), окно «Настройки» (темы, акцент, 6 языков, бэкап),
    телефон 390×844 (верхняя полоса, нижний Dock, карточки вместо таблиц), 0 ошибок консоли / 0 запросов 404.
    Запуск (из корня проекта):
      python3 -m http.server 8765 --bind 127.0.0.1 &
@@ -56,11 +56,11 @@ const nodePos = (page, pred) => page.evaluate(pr => {
   const done = async () => { if (ctx) { allLogs.push(...logs); await ctx.close(); ctx = null; } };
 
   /* ============ 1. каркас ============ */
-  await section(1, 'Каркас #app: Ribbon 48 px, Topbar 48 px, Workspace 100 %, Inspector за краем', async () => {
+  await section(1, 'Каркас #app: Ribbon 48 px, ультратонкий статус-бар 40 px, Workspace 100 %, Inspector за краем', async () => {
     ({ ctx, page, logs } = await fresh(browser)); await loginAs(page, 'eng.rza', 'admin123');
     const lay = await page.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { rbw: Math.round(r('ribbon').width), tph: Math.round(r('top').height), mnw: Math.round(r('main').width), vw: innerWidth, inspX: Math.round(r('insp').left), sel: document.querySelectorAll('#top select').length, nav: document.querySelectorAll('#rbNav button').length, gear: document.querySelectorAll('#ribbon [data-open="settings"]').length, scroll: document.documentElement.scrollWidth, ava: document.getElementById('rbAva').textContent, hasCrash: !!document.getElementById('btnCrash') }; });
     ok(lay.rbw === 48, 'Ribbon шириной 48 px', JSON.stringify(lay));
-    ok(lay.tph === 48, 'Topbar высотой 48 px');
+    ok(lay.tph === 40, 'Стеклянный статус-бар высотой 40 px (на телефоне — 42, см. блок 15)', String(lay.tph));
     ok(Math.abs(lay.mnw - (lay.vw - 48)) <= 1, 'Workspace занимает всё остальное по ширине (100 %)', lay.mnw + ' / ' + (lay.vw - 48));
     ok(lay.sel === 0, 'в шапке нет <select>');
     ok(lay.nav === 4, '4 раздела в Ribbon: датчики, граф, аудит, плагины');
@@ -98,7 +98,7 @@ const nodePos = (page, pred) => page.evaluate(pr => {
   await section(3, 'Topbar: метрики, часы UTC+7, меню «Испытания стенда»', async () => {
     ({ ctx, page, logs } = await fresh(browser)); await loginAs(page, 'eng.rza', 'admin123');
     const t = await page.evaluate(() => ({ core: document.getElementById('coreStatus').innerText, m: ['tU', 'tI', 'tT', 'tRul', 'tSrc'].map(i => document.getElementById(i).textContent), sec: document.getElementById('secTitle').textContent, demo: document.getElementById('btnDemo').innerText }));
-    ok(/PINN Core/i.test(t.core) && /Online/i.test(t.core), 'слева: заголовок раздела + «PINN Core Online»', t.core);
+    ok(/PINN Core/i.test(t.core) && /Online|симуляц/i.test(t.core), 'слева: заголовок раздела + чип источника данных «PINN Core · симуляция» (DEMO) / «Online» (железо)', t.core);
     ok(/^11[01]\.\d$/.test(t.m[0]) && +t.m[1] > 600 && /^\d+\.\d$/.test(t.m[2]) && /ч|h/.test(t.m[3]) && /ВВОД 1/.test(t.m[4]), 'по центру: 110 кВ / ток / стык °C / RUL / ВВОД 1', t.m.join(' | '));
     ok(/Испытания стенда/.test(t.demo), 'справа: выпадающее меню «Испытания стенда (Demo)»', t.demo);
     const c1 = await page.textContent('#tClock'); await sleep(1100); const c2 = await page.textContent('#tClock');
@@ -191,7 +191,7 @@ const nodePos = (page, pred) => page.evaluate(pr => {
     await page.click('#btnDemo'); await sleep(300); await page.click('#demoHeat');
     ok(await waitFor(page, () => PINN.state().alarm.active, null, 45000), 'нагрев: температура стыка растёт к 85 °C, включается авария');
     const h = await page.evaluate(() => { const s = PINN.state(); return { T: window.__maxT, Rk: s.Rk, rul: s.rul, src: s.src, ats: s.ats, in1: s.in1, kind: s.alarm.kind, banner: !document.getElementById('alarm').hidden && document.getElementById('alarm').getBoundingClientRect().height > 30, title: document.getElementById('alarmTitle').textContent, toast: document.querySelectorAll('#toasts .toast').length, st: document.querySelector('#sensorGrid .sc[data-sid="MLX90614-IR-01"]').dataset.st }; });
-    ok(h.T >= 80 && h.Rk >= 90 && h.rul <= 16 && h.kind === 'heat', 'пик T ≥ 80 °C (→85), R_k → ~95 µΩ, RUL → ~15 мин', [h.T, h.Rk, h.rul].map(v => +(+v).toFixed(1)).join(' / '));
+    ok(h.T >= 80 && h.Rk >= 90 && h.rul <= 18 && h.kind === 'heat', 'пик T ≥ 80 °C (→85), R_k → ~95 µΩ, RUL → ~15–17 мин (зависит от момента опроса)', [h.T, h.Rk, h.rul].map(v => +(+v).toFixed(1)).join(' / '));
     ok(h.src === 'IN2' && h.ats === 'closed' && h.in1 === 'open', 'АВР автоматически перевёл питание на ВВОД 2', h.src + '/' + h.ats);
     ok(h.banner && /перегрев|heat|overheat/i.test(h.title), 'баннер аварии в потоке страницы', h.title); ok(h.toast >= 1, 'стеклянные Toast-уведомления показаны');
     const a1 = await auditTop(page, 8); ok(a1.some(e => e.k === 'ev.alarm.heat') && a1.some(e => /ats/.test(e.k) || e.cat === 'RELAY'), 'в журнал записаны авария и автопереключение АВР', a1.map(e => e.k).join(','));
@@ -220,8 +220,8 @@ const nodePos = (page, pred) => page.evaluate(pr => {
     await page.click('#btnDemo'); await sleep(300); await page.click('#demoReset'); await sleep(1600);
   }); await done();
 
-  /* ============ 7. профиль: QR / PIN / выход ============ */
-  await section(7, 'Профиль сотрудника: данные, QR + 6-значный PIN (30 с), вход с телефона, выход', async () => {
+  /* ============ 7. профиль: «Подключить телефон» / выход ============ */
+  await section(7, 'Профиль сотрудника: данные, «Подключить телефон» (QR-токен + PIN по нажатию, 90 с), вход с телефона, выход', async () => {
     ({ ctx, page, logs } = await fresh(browser)); await loginAs(page, 'eng.rza', 'admin123');
     await openProfile(page, 'id');
     const p = await page.evaluate(() => ({ title: document.getElementById('pfTitle').textContent, name: empName.textContent, id: empId.textContent, role: empRole.textContent, badge: empBadge.textContent, sess: empSess.textContent, cfg: cfgString.textContent, tabs: [...document.querySelectorAll('#mProfile .wnd-tab')].map(t => t.dataset.tab).join(','), w: document.querySelector('#mProfile .wnd').getBoundingClientRect().width }));
@@ -231,26 +231,44 @@ const nodePos = (page, pred) => page.evaluate(pr => {
     const myPerms = uid => page.evaluate(uid => { const perms = UsersDB.permsOf(uid), li = [...document.querySelectorAll('#pfPerms li')]; return { n: li.length, same: li.every(x => (x.dataset.on === '1') === !!perms[x.dataset.perm]), on: li.filter(x => x.dataset.on === '1').length, txt: li.map(x => x.dataset.perm + '=' + x.dataset.on).join(' ') }; }, uid);
     const mp = await myPerms('1073819'); ok(mp.n === 4 && mp.same && mp.on === 4, 'блок «Мои права доступа»: 4 права, у главного инженера РЗА выданы все', mp.txt);
     const s1 = await page.textContent('#empSess'); await sleep(2200); ok((await page.textContent('#empSess')) !== s1 && /\d\d:\d\d/.test(s1), 'живой таймер сессии тикает', s1 + ' → ' + (await page.textContent('#empSess')));
-    const q = await page.evaluate(() => { const c = document.getElementById('pfQr'); return { w: c.width || c.clientWidth, pin: document.getElementById('pfPin').textContent.replace(/\D/g, ''), url: document.getElementById('pfUrl').textContent, sec: +document.getElementById('pfSec').textContent.replace(/\D/g, '') }; });
-    ok(q.w >= 120 && /^\d{6}$/.test(q.pin), 'живой QR и одноразовый 6-значный код', q.w + ' / ' + q.pin);
-    ok(/qr_auth=session&uid=1073819&code=\d{6}/.test(q.url), 'ссылка привязана к ТЕКУЩЕМУ аккаунту: ?qr_auth=session&uid=<ID>&code=<PIN>', q.url);
-    await sleep(2300); const q2 = await page.evaluate(() => +document.getElementById('pfSec').textContent.replace(/\D/g, '')); ok(q.sec >= 1 && q.sec <= 30 && q2 !== q.sec, 'таймер окна 30 с отсчитывает секунды', q.sec + ' → ' + q2);
+    /* до нажатия кнопки ни QR, ни PIN не существуют */
+    ok(await page.evaluate(() => document.getElementById('pfQrWrap').hidden && !document.getElementById('pfPhone').hidden && !document.getElementById('pfLink').dataset.url && !document.getElementById('pfPin').dataset.code), 'до нажатия «Подключить телефон» QR, PIN и ссылка не выпускаются');
+    await page.click('#pfPhone'); await sleep(900);
+    const q = await page.evaluate(() => { const c = document.getElementById('pfQr'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let ink = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 20) ink++; return { w: c.width, ink, vis: !document.getElementById('pfQrWrap').hidden, pin: document.getElementById('pfPin').dataset.code, url: document.getElementById('pfLink').dataset.url, sec: +document.getElementById('pfSec').textContent.replace(/\D/g, '') }; });
+    ok(q.vis && q.w >= 120 && q.ink > 300 && /^\d{6}$/.test(q.pin), 'после нажатия — живой QR и одноразовый 6-значный PIN', q.w + ' / ink ' + q.ink + ' / ' + q.pin);
+    ok(/#abai-qr=[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(q.url) && !/[?&](code|uid|qr_auth)=/.test(q.url), 'ссылка — подписанный токен в #-части, без открытого кода и uid', q.url.slice(0, 70));
+    const tk = await page.evaluate(u => UsersDB.qr.inspect(u), q.url);
+    ok(tk && tk.typ === 'qr' && tk.sub === '1073819' && tk.exp - Date.now() <= 90500 && tk.exp - Date.now() > 80000, 'токен привязан к ТЕКУЩЕМУ аккаунту (sub=1073819), срок жизни 90 с', JSON.stringify(tk));
+    await sleep(2300); const q2 = await page.evaluate(() => +document.getElementById('pfSec').textContent.replace(/\D/g, '')); ok(q.sec >= 80 && q.sec <= 90 && q2 < q.sec, 'таймер 90 с отсчитывает секунды', q.sec + ' → ' + q2);
     await shot(page, 's2_profile.png');
-    /* ссылки для телефона — все три аккаунта, в изолированных контекстах */
-    const acc = [['1073819', 'Левицкий А.Р.'], ['1073820', 'Соколов И.В.'], ['1073821', 'Эксперт Жюри']];
-    for (const [uid, fio] of acc) {
-      const qs = await page.evaluate(uid => { const l = UsersDB.session.link(uid); return l.slice(l.indexOf('?')); }, uid);
-      const c2 = await fresh(browser); await c2.page.goto(URL + qs); const okLogin = await waitFor(c2.page, () => !document.body.classList.contains('locked'), null, 9000); await sleep(900);
-      const who = okLogin ? await c2.page.evaluate(() => document.getElementById('empName').textContent) : '—'; ok(okLogin && who === fio, 'ссылка ?qr_auth=session открывает именно аккаунт ' + uid + ' (' + fio + ')', who);
-      allLogs.push(...c2.logs); await c2.ctx.close();
-    }
-    const c3 = await fresh(browser); await c3.page.goto(URL + '?qr_auth=session&uid=1073820&code=000000'); await sleep(1600); ok(await locked(c3.page), 'неверный код в ссылке не пускает'); allLogs.push(...c3.logs); await c3.ctx.close();
-    const c4 = await fresh(browser); await c4.page.goto(URL + '?qr_auth=jury_session&code=261126'); const jOk = await waitFor(c4.page, () => !document.body.classList.contains('locked'), null, 9000); await sleep(700);
-    ok(jOk && (await c4.page.evaluate(() => document.getElementById('empName').textContent)) === 'Эксперт Жюри', 'старая ссылка ?qr_auth=jury_session по-прежнему работает'); allLogs.push(...c4.logs); await c4.ctx.close();
-    /* ввод PIN в экране входа */
-    const pin = await page.evaluate(() => UsersDB.session.code('1073820')), c5 = await fresh(browser); await c5.page.goto(URL); await sleep(1100); await c5.page.click('#qrBtn'); await sleep(900); await c5.page.click('#drawer .tabs [data-tab="phone"]'); await sleep(500);
-    await c5.page.click('#otp input'); await c5.page.keyboard.type(pin, { delay: 60 }); const pOk = await waitFor(c5.page, () => !document.body.classList.contains('locked'), null, 8000); await sleep(800);
-    ok(pOk && (await c5.page.evaluate(() => document.getElementById('empName').textContent)) === 'Соколов И.В.', 'PIN аккаунта, введённый на экране входа, пускает именно этого сотрудника'); allLogs.push(...c5.logs); await c5.ctx.close();
+    /* вход с телефона по QR — другое «устройство» (изолированный контекст) */
+    const c2 = await fresh(browser); await c2.page.goto('about:blank'); await c2.page.goto(q.url); const okLogin = await waitFor(c2.page, () => !document.body.classList.contains('locked'), null, 9000); await sleep(900);
+    const who = okLogin ? await c2.page.evaluate(() => [document.getElementById('empName').textContent, location.hash + location.search]) : ['—', ''];
+    ok(okLogin && who[0] === 'Левицкий А.Р.' && who[1] === '', 'QR со страницы профиля открывает именно этот аккаунт на другом устройстве, токен стёрт из адреса', JSON.stringify(who));
+    allLogs.push(...c2.logs); await c2.ctx.close();
+    /* одноразовость: после входа код гаснет, второй заход отвергается */
+    const r1 = await page.evaluate(u => UsersDB.qr.redeem(u), q.url); await sleep(700);
+    const r2 = await page.evaluate(u => UsersDB.qr.redeem(u), q.url);
+    ok(r1.ok && r1.kind === 'personal' && !r2.ok && r2.reason === 'USED', 'одноразовость jti: первый заход пускает, второй — USED', JSON.stringify([r1.ok, r2.reason]));
+    ok(await page.evaluate(() => !document.getElementById('pfPhoneDone').hidden && document.getElementById('pfQrWrap').hidden && document.getElementById('pfUrl').textContent === ''), 'после использования окно показывает «Код использован», QR и ссылка стёрты из DOM');
+    /* PIN: тот же аккаунт, новый код; чужой PIN и неверный PIN */
+    await page.click('#pfPhone'); await sleep(700); const pin = await page.evaluate(() => document.getElementById('pfPin').dataset.code);
+    const c5 = await fresh(browser); await c5.page.goto(URL); await sleep(1100); await c5.page.click('#qrBtn'); await sleep(900); await c5.page.click('#drawer .tabs [data-tab="phone"]'); await sleep(500);
+    await c5.page.click('#otp input'); await c5.page.keyboard.type('000000', { delay: 40 }); await sleep(700); ok(await locked(c5.page), 'неверный PIN не пускает');
+    await c5.page.evaluate(() => { document.querySelectorAll('#otp input').forEach(i => { i.value = ''; }); document.querySelector('#otp input').focus(); });
+    await c5.page.keyboard.type(pin, { delay: 60 }); const pOk = await waitFor(c5.page, () => !document.body.classList.contains('locked'), null, 8000); await sleep(800);
+    ok(pOk && (await c5.page.evaluate(() => document.getElementById('empName').textContent)) === 'Левицкий А.Р.', 'личный PIN, введённый на экране входа, пускает именно этого сотрудника'); allLogs.push(...c5.logs); await c5.ctx.close();
+    /* старая ссылка с открытым кодом и uid — не работает */
+    const c3 = await fresh(browser); await c3.page.goto(URL + '?qr_auth=session&uid=1073820&code=000000'); await sleep(1700); ok(await locked(c3.page), 'старая ссылка ?qr_auth=session&uid=…&code=… не пускает');
+    ok(await c3.page.evaluate(() => /больше не принимаются|устарела/i.test(document.getElementById('authMsg').textContent)), 'и объясняет, что коды в адресе больше не принимаются'); allLogs.push(...c3.logs); await c3.ctx.close();
+    const c4 = await fresh(browser); await c4.page.goto(URL + '?qr_auth=jury_session&code=261126'); await sleep(1700); ok(await locked(c4.page), 'старая ссылка ?qr_auth=jury_session&code=261126 тоже отвергается'); allLogs.push(...c4.logs); await c4.ctx.close();
+    /* отзыв кода: код, выпущенный для шага PIN, ещё жив (вход по PIN jti не гасит) */
+    const tok2 = await page.evaluate(() => document.getElementById('pfLink').dataset.url); await page.click('#pfPhoneOff'); await sleep(400);
+    ok(await page.evaluate(u => UsersDB.qr.used(u) && !document.getElementById('pfPhoneDone').hidden && document.getElementById('pfLink').dataset.url === '' && UsersDB.qr.redeem(u).reason === 'USED', tok2), '«Отозвать код» гасит токен: redeem → USED, QR и ссылка стёрты');
+    /* смена вкладки тоже отзывает активный код */
+    await page.click('#pfPhone'); await sleep(500); const tok3 = await page.evaluate(() => document.getElementById('pfLink').dataset.url); await page.click('#mProfile .wnd-tab[data-tab="rbac"]'); await sleep(350);
+    ok(await page.evaluate(u => UsersDB.qr.used(u), tok3), 'уход с вкладки «Профиль» отзывает выпущенный код');
+    await page.click('#mProfile .wnd-tab[data-tab="id"]'); await sleep(300);
     /* выход */
     await page.click('#btnLogout'); await sleep(900); ok(await locked(page), '«Выйти из аккаунта» плавно возвращает экран входа');
     ok(await page.evaluate(() => document.getElementById('bgCanvas').width > 100 && FrostCanvas.stats().running), 'фон экрана входа снова живой');
@@ -315,7 +333,7 @@ const nodePos = (page, pred) => page.evaluate(pr => {
   await section(10, 'Настройки: темы, акцент, анимации, часовой пояс, 6 языков без перезагрузки', async () => {
     ({ ctx, page, logs } = await fresh(browser)); await loginAs(page, 'eng.rza', 'admin123');
     await page.evaluate(() => { window.__noReload = 1; }); await page.click('#btnSettings'); await sleep(700);
-    const cats = await page.evaluate(() => [...document.querySelectorAll('#mSettings .st-nav button')].map(b => b.dataset.cat).join(',')); ok(cats === 'ui,lang,perf,db', 'меню категорий: Интерфейс / Язык / Производительность / БД', cats);
+    const cats = await page.evaluate(() => [...document.querySelectorAll('#mSettings .st-nav button')].map(b => b.dataset.cat).join(',')); ok(cats === 'ui,lang,perf,hw,db', 'меню категорий: Интерфейс / Язык / Производительность / Оборудование / БД', cats);
     ok(await page.evaluate(() => document.querySelectorAll('#themeGrid .theme-card').length === 3 && document.querySelectorAll('#langGrid .lang-btn').length === 6), '3 темы и 6 языков'); await shot(page, 's2_settings.png');
     const bgs = {}; for (const t of ['amber', 'light', 'dark']) { await page.click('#themeGrid .theme-card[data-theme="' + t + '"]'); await sleep(450); bgs[t] = await page.evaluate(() => [document.documentElement.dataset.theme, getComputedStyle(document.body).backgroundColor, getComputedStyle(document.getElementById('app')).getPropertyValue('--acc').trim()].join('|')); }
     ok(new Set(Object.values(bgs).map(v => v.split('|')[1])).size === 3 && Object.keys(bgs).every(k => bgs[k].startsWith(k)), 'темы Dark Obsidian / Amber Industrial / Light Engineering мгновенно меняют палитру', JSON.stringify(bgs));
@@ -421,6 +439,7 @@ const nodePos = (page, pred) => page.evaluate(pr => {
   /* ============ 13. плагины ============ */
   await section(13, 'Плагины: включение/выключение, JSON-параметры, свой плагин JS/Python', async () => {
     ({ ctx, page, logs } = await fresh(browser)); await loginAs(page, 'eng.rza', 'admin123'); await show(page, 'plugins');
+    const openAdd = async () => { await page.click('#btnAddPlugin'); await sleep(550); await page.click('#plTabs [data-tab="code"]'); await sleep(250); };   // окно открывается на вкладке «Папка плагина»
     const pl = await page.evaluate(() => ({ rows: document.querySelectorAll('#plugList .pl-row').length, on: document.querySelectorAll('#plugList .pl-row[data-on="1"]').length, cnt: document.getElementById('plCount').textContent }));
     ok(pl.rows === 9 && pl.on === 6, '9 встроенных плагинов, 6 включены', JSON.stringify(pl)); await shot(page, 's2_plugins.png');
     const was = await page.evaluate(() => Store.plugins.enabled('VOICE-ALARM-TTS')); await page.click('label.sw:has(input[data-pl-on="VOICE-ALARM-TTS"])'); await sleep(500);
@@ -432,19 +451,23 @@ const nodePos = (page, pred) => page.evaluate(pr => {
     ok(ed.open && /\{/.test(ed.params), '⚙ открывает JSON-параметры плагина', ed.params.slice(0, 60));
     await page.fill('#plParams', '{ bad json'); await page.click('#plSave'); await sleep(350); ok(await page.evaluate(() => document.getElementById('plErr').textContent.length > 3), 'невалидный JSON отклоняется с понятной ошибкой');
     await page.fill('#plParams', '{"tol_C": 7, "hold_s": 5}'); await page.click('#plSave'); await sleep(600); ok(await page.evaluate(() => JSON.stringify(Store.plugins.get('PINN-KIRCHHOFF-GUARD').params).indexOf('"tol_C":7') >= 0), 'новые параметры применены');
-    await page.click('#btnAddPlugin'); await sleep(600);
+    await openAdd();
     /* контракт пользовательского JS-плагина: тело функции, на входе plugin = {packet, params, state}, на выходе {alarm, note} */
     await page.fill('#plName', 'MY-TEST-PLUGIN'); await page.fill('#plCode', "return { alarm: plugin.packet.temp > -100 && plugin.params.on === true, note: 'MY-PLUGIN-HIT ' + Math.round(plugin.packet.temp) };");
     await page.fill('#plParams', '{"on": true}'); await page.click('#plSave'); await sleep(700);
     ok(await page.evaluate(() => !!Store.plugins.get('MY-TEST-PLUGIN') && document.querySelectorAll('#plugList .pl-row').length === 10), 'собственный JS-плагин добавлен в список (10 шт.)');
     ok(await waitFor(page, () => Store.audit.list().some(e => e.k === 'ev.plugin.alarm' && e.node === 'MY-TEST-PLUGIN' && /MY-PLUGIN-HIT/.test(e.nw)), null, 6000), 'свой плагин реально исполняется на такте симуляции: получает пакет и параметры, его alarm попадает в журнал');
-    await page.click('#btnAddPlugin'); await sleep(500); await page.fill('#plName', 'BAD-WINDOW'); await page.fill('#plCode', "window.__hack = 1; localStorage.setItem('x', '1'); return { alarm: false };"); await page.click('#plSave'); await sleep(900);
-    ok(await waitFor(page, () => !!document.querySelector('#plugList .pl-row[data-id="BAD-WINDOW"] .pill-err'), null, 5000) && await page.evaluate(() => window.__hack === undefined && localStorage.getItem('x') === null), 'плагин не получает window/localStorage: ошибка показана в строке, сайт не затронут');
-    await page.click('#btnAddPlugin'); await sleep(500); await page.fill('#plName', 'BAD-SYNTAX'); await page.fill('#plCode', 'return {{ alarm'); await page.click('#plSave'); await sleep(400);
+    /* этап 3: код проходит пробный запуск в песочнице ещё ДО сохранения — обращение к window/localStorage отклоняется в окне, плагин в список не попадает */
+    await openAdd(); await page.fill('#plName', 'BAD-WINDOW'); await page.fill('#plCode', "window.__hack = 1; localStorage.setItem('x', '1'); return { alarm: false };"); await page.click('#plSave'); await sleep(900);
+    ok(await page.evaluate(() => document.getElementById('plErr').textContent.length > 3 && !Store.plugins.get('BAD-WINDOW') && document.getElementById('mPlugin').dataset.open === '1' && window.__hack === undefined && localStorage.getItem('x') === null), 'плагин не получает window/localStorage: пробный запуск отклоняет код до сохранения, плагин не создаётся, сайт не затронут');
+    /* а код, который на пробном пакете ведёт себя тихо, но ломается на живых данных, ловится на лету: ошибка видна в строке плагина, сайт по-прежнему не затронут */
+    await page.fill('#plName', 'LATE-WINDOW'); await page.fill('#plCode', "if (plugin.packet.temp !== 42) { window.__hack = 1; localStorage.setItem('x', '1'); } return { alarm: false };"); await page.click('#plSave'); await sleep(900);
+    ok(await waitFor(page, () => !!document.querySelector('#plugList .pl-row[data-id="LATE-WINDOW"] .pill-err'), null, 8000) && await page.evaluate(() => window.__hack === undefined && localStorage.getItem('x') === null), 'на лету: ошибка песочницы показана в строке плагина, сайт не затронут');
+    await openAdd(); await page.fill('#plName', 'BAD-SYNTAX'); await page.fill('#plCode', 'return {{ alarm'); await page.click('#plSave'); await sleep(400);
     ok(await page.evaluate(() => document.getElementById('plErr').textContent.length > 3 && !Store.plugins.get('BAD-SYNTAX')), 'синтаксическая ошибка JS отклоняется при сохранении, плагин не создаётся'); await page.click('#mPlugin [data-close]').catch(() => page.keyboard.press('Escape')); await sleep(400);
-    await page.click('[data-pl-del="BAD-WINDOW"]'); await sleep(500);
-    await page.click('[data-pl-del="MY-TEST-PLUGIN"]'); await sleep(600); ok(await page.evaluate(() => !Store.plugins.get('MY-TEST-PLUGIN') && !Store.plugins.get('BAD-WINDOW') && document.querySelectorAll('#plugList .pl-row').length === 9), 'свои плагины можно удалить (остаются 9 встроенных)');
-    await page.click('#btnAddPlugin'); await sleep(500); await page.fill('#plName', 'PY-TEST'); await page.selectOption('#plLang', 'py');
+    await page.click('[data-pl-del="LATE-WINDOW"]'); await sleep(500);
+    await page.click('[data-pl-del="MY-TEST-PLUGIN"]'); await sleep(600); ok(await page.evaluate(() => !Store.plugins.get('MY-TEST-PLUGIN') && !Store.plugins.get('LATE-WINDOW') && document.querySelectorAll('#plugList .pl-row').length === 9), 'свои плагины можно удалить (остаются 9 встроенных)');
+    await openAdd(); await page.fill('#plName', 'PY-TEST'); await page.selectOption('#plLang', 'py');
     await page.fill('#plCode', 'def run(state):\n    return state'); await page.click('#plSave'); await sleep(700);
     ok(await page.evaluate(() => { const p = Store.plugins.get('PY-TEST'); return !!p && p.lang === 'py' && /def run/.test(p.code) && !!document.querySelector('#plugList .pl-row[data-id="PY-TEST"] .pill-acc') && !document.querySelector('#plugList .pl-row[data-id="PY-TEST"] .pill-err'); }), 'плагин на Python сохраняется с меткой PY и не исполняется в браузере (Phase 2: сервер FastAPI)');
   }); await done();
@@ -472,10 +495,10 @@ const nodePos = (page, pred) => page.evaluate(pr => {
   }); await done();
 
   /* ============ 15. телефон ============ */
-  await section(15, 'Телефон 390×844: верхняя полоса 44 px, нижний Dock, карточки вместо таблиц, окна-шторки', async () => {
+  await section(15, 'Телефон 390×844: верхняя полоса 42 px, нижний Dock, карточки вместо таблиц, окна-шторки', async () => {
     ({ ctx, page, logs } = await fresh(browser, { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true })); await loginAs(page, 'eng.rza', 'admin123', true);
     const m = await page.evaluate(() => { const r = id => document.getElementById(id).getBoundingClientRect(); return { top: Math.round(r('top').height), rb: getComputedStyle(document.getElementById('ribbon')).display, dock: r('mdock').height, dockBtns: document.querySelectorAll('#mdock button').length, dockPos: getComputedStyle(document.getElementById('mdock')).position, sw: document.documentElement.scrollWidth, vw: innerWidth, bd: getComputedStyle(document.getElementById('mdock')).backdropFilter || getComputedStyle(document.getElementById('mdock')).webkitBackdropFilter }; });
-    ok(m.top === 44, 'верхняя стеклянная полоса 44 px', JSON.stringify(m)); ok(m.rb === 'none', 'левый Ribbon на телефоне скрыт');
+    ok(m.top === 42, 'верхняя стеклянная полоса 42 px', JSON.stringify(m)); ok(m.rb === 'none', 'левый Ribbon на телефоне скрыт');
     ok(m.dockPos === 'fixed' && m.dockBtns === 5 && m.dock >= 50 && /blur/.test(m.bd), 'нижний Dock: фиксированный, «морозное» стекло, 5 кнопок (датчики, граф, аудит, плагины, настройки)', JSON.stringify(m));
     ok(m.sw <= m.vw, 'нет горизонтального переполнения на главной');
     await shot(page, 's2_m_grid.png');

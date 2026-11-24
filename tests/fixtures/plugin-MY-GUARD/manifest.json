@@ -1,0 +1,8 @@
+{
+  "name": "MY-GUARD",
+  "version": "1.0.2",
+  "runtime": "js",
+  "entry": "worker.js",
+  "description": "Test plugin from folder",
+  "params": { "temp_limit_c": 70 }
+}

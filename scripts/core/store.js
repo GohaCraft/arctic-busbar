@@ -1,13 +1,20 @@
 /* ARCTIC BUSBAR AI v2.4.0-prod: scripts/core/store.js  (единое хранилище состояния, БЕЗ DOM-разметки)
-   Настройки (язык, тема, акцент, анимации, пояс, частота телеметрии), уставки датчиков, плагины, ЖУРНАЛ АУДИТА с откатом (Rollback),
-   бэкап / восстановление .json, палитра для canvas. Подключается после users-db.js и i18n.js.
+   Настройки (язык, тема, акцент, фон, Полярная ночь, анимации, пояс, частота телеметрии), уставки датчиков, плагины-проекты, ЖУРНАЛ АУДИТА с откатом (Rollback),
+   раскладки графа по user.id, бэкап / восстановление .json, палитра для canvas. Подключается после users-db.js и i18n.js.
    API: window.Store. События (window): abai:settings {key,value}, abai:thresholds {key,value,old}, abai:plugins {id},
-   abai:audit {entry}, abai:restored (после восстановления бэкапа / сброса демо-данных).
+   abai:audit {entry}, abai:restored (после восстановления бэкапа / сброса демо-данных), abai:session {state:'start'|'refresh'|'end', reason}.
    Журнал: записи языконезависимы ({k, p} — ключ и параметры i18n), поэтому при смене языка весь журнал переводится мгновенно.
-   Данные хранятся в localStorage (при недоступности — в памяти вкладки). Фаза 2: те же методы поверх REST FastAPI + PostgreSQL. */
+   Данные хранятся в localStorage (при недоступности — в памяти вкладки). Фаза 2: те же методы поверх REST FastAPI + PostgreSQL.
+
+   ЭТАП 3 — Store.session: ИММУТАБЕЛЬНАЯ сессия в памяти (замыкание + Object.freeze). Права (CAN_*) читаются ТОЛЬКО отсюда:
+   Store.session.has('CAN_MANAGE_PLUGINS'). Из консоли нельзя ни дописать право (объект заморожен, свойства только для чтения), ни подменить сам Store
+   (window.Store — неизменяемое свойство). Источник правды — подписанный токен: has() периодически перепроверяет подпись и срок, при расхождении
+   сессия убивается (abai:session end, reason 'tamper'). Токен дублируется в sessionStorage (переживает F5, исчезает при закрытии вкладки);
+   end() стирает токен, все ключи abai.s.* и ВСЕ таймеры, зарегистрированные через Store.session.interval/timeout. */
 (function (g) {
 'use strict';
-const KEY = { settings: 'abai.settings', audit: 'abai.audit', thr: 'abai.thresholds', plug: 'abai.plugins' };
+const KEY = { settings: 'abai.settings', audit: 'abai.audit', thr: 'abai.thresholds', plug: 'abai.plugins', layout: 'abai.layouts' };
+const SESS_KEY = 'abai.s.tok';
 const VERSION = '2.4.0-prod', AUDIT_CAP = 500;
 const mem = {};
 const load = (k, d) => { try { const v = g.localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return k in mem ? mem[k] : d; } };
@@ -17,13 +24,13 @@ const pad = n => String(n).padStart(2, '0');
 const DB = () => g.UsersDB, TT = (k, p) => (g.I18N ? g.I18N.t(k, p) : k);
 
 /* ======================= НАСТРОЙКИ ======================= */
-const DEFAULTS = { lang: 'ru', theme: 'dark', accent: null, anim: true, tz: 'utc7', tele: 4, fps: 60, fx: true };
+const DEFAULTS = { lang: 'ru', theme: 'dark', accent: null, bg: 'waves', polar: false, anim: true, tz: 'utc7', tele: 4, fps: 60, fx: true };
 const TZ = { utc3: 3, utc7: 7, utc8: 8, utc0: 0 };
-const ENUM = { lang: ['ru', 'en', 'zh', 'kk', 'be', 'uk'], theme: ['dark', 'amber', 'light'], tz: Object.keys(TZ), tele: [2, 4, 10], fps: [30, 60] };
+const ENUM = { lang: ['ru', 'en', 'zh', 'kk', 'be', 'uk'], theme: ['dark', 'amber', 'light'], bg: ['waves', 'aurora', 'contour', 'mesh', 'plain'], tz: Object.keys(TZ), tele: [2, 4, 10], fps: [30, 60] };
 let settings = Object.assign({}, DEFAULTS, load(KEY.settings, {}));
 function sane(k, v) {
   if (k === 'accent') return /^#[0-9a-f]{6}$/i.test(v || '') ? String(v).toLowerCase() : null;
-  if (k === 'anim' || k === 'fx') return !!v;
+  if (k === 'anim' || k === 'fx' || k === 'polar') return v === true || v === 'true' || v === 1;
   if (k === 'tele' || k === 'fps') { v = +v; return ENUM[k].indexOf(v) >= 0 ? v : DEFAULTS[k]; }
   return ENUM[k] && ENUM[k].indexOf(v) < 0 ? DEFAULTS[k] : v;
 }
@@ -34,6 +41,8 @@ let pal = null;
 function applySetting(k) {
   const root = document.documentElement;
   if (k === 'theme') root.dataset.theme = settings.theme;
+  else if (k === 'bg') root.dataset.bg = settings.bg;
+  else if (k === 'polar') root.dataset.polar = settings.polar ? '1' : '0';
   else if (k === 'accent') {
     if (settings.accent) { root.style.setProperty('--acc', settings.accent); root.style.setProperty('--acc-fg', lum(settings.accent) > .42 ? '#06121C' : '#FFFFFF'); }
     else { root.style.removeProperty('--acc'); root.style.removeProperty('--acc-fg'); }
@@ -100,31 +109,182 @@ const BUILTIN = [
   { id: 'NANOCAD-PASSPORT', cat: 'p.c8', ver: '0.8.0', lat: 48, on: false, params: { project: 'PS-110-NORILSK', dwg: 'passport.dwg' } }
 ];
 const clone = o => JSON.parse(JSON.stringify(o));
+/* Плагин = проект-дерево: manifest.json + точка входа (worker.js для JS, worker.py для Python) + любые вспомогательные файлы.
+   Старый вызов add({id, lang, code, params}) по-прежнему работает: дерево собирается автоматически. */
+const PL = { MAX_FILES: 24, MAX_FILE: 128 * 1024, MAX_TOTAL: 512 * 1024, ID: /^[A-Za-z0-9._-]{2,40}$/, VER: /^\d+\.\d+\.\d+([-+][0-9A-Za-z.-]+)?$/ };
+const entryOf = lang => (lang === 'py' ? 'worker.py' : 'worker.js');
+function normPath(p) {
+  p = String(p || '').replace(/\\/g, '/').replace(/^(\.\/)+/, '').replace(/^\/+/, '');
+  if (!p || p.length > 120 || !/^[A-Za-z0-9._\- \/]+$/.test(p) || p.split('/').some(s => !s || s === '.' || s === '..')) return '';
+  return p;
+}
+function normFiles(files) {                                                                                   // → {ok, files} | {ok:false, reason}
+  if (!Array.isArray(files) || !files.length) return { ok: false, reason: 'FILES_EMPTY' };
+  if (files.length > PL.MAX_FILES) return { ok: false, reason: 'FILES_LIMIT' };
+  const seen = {}, out = []; let total = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i] || {}, path = normPath(f.path), text = typeof f.text === 'string' ? f.text : '';
+    if (!path) return { ok: false, reason: 'PATH', path: String(f.path || '') };
+    if (seen[path]) continue; seen[path] = 1;
+    if (text.length > PL.MAX_FILE) return { ok: false, reason: 'FILE_BIG', path };
+    total += text.length; if (total > PL.MAX_TOTAL) return { ok: false, reason: 'FILES_LIMIT' };
+    out.push({ path, text });
+  }
+  return { ok: true, files: out };
+}
+function manifestOf(p) { return JSON.stringify({ name: p.id, version: p.ver || '0.1.0', runtime: p.lang === 'py' ? 'py' : 'js', entry: p.entry || entryOf(p.lang), params: p.params || {} }, null, 2); }
+function plugTree(p) {
+  if (Array.isArray(p.files) && p.files.length) return p.files;
+  const entry = p.entry || entryOf(p.lang);
+  return p.builtin ? [{ path: 'manifest.json', text: manifestOf(p) }] : [{ path: 'manifest.json', text: manifestOf(p) }, { path: entry, text: String(p.code || '') }];
+}
+function syncManifest(p) {                                                                                    // params в manifest.json дерева должны совпадать с p.params (иначе экспорт папки разойдётся с состоянием)
+  if (!Array.isArray(p.files)) return; const mf = p.files.find(f => f.path === 'manifest.json'); if (!mf) return;
+  try { const m = JSON.parse(mf.text); m.params = p.params || {}; mf.text = JSON.stringify(m, null, 2) + '\n'; } catch (e) { mf.text = manifestOf(p) + '\n'; }
+}
 function plugDefaults() { return BUILTIN.map(p => Object.assign(clone(p), { builtin: true, lang: 'js' })); }
 function plugMerge(saved) {                                                                                   // встроенные всегда на месте, пользовательские — из сохранённого
   const by = {}; (saved || []).forEach(p => { if (p && p.id) by[p.id] = p; });
   const out = plugDefaults().map(d => { const s = by[d.id]; if (s) { d.on = !!s.on; if (s.params && typeof s.params === 'object') d.params = s.params; delete by[d.id]; } return d; });
-  Object.keys(by).forEach(id => { const s = by[id]; if (!s.builtin) out.push({ id: s.id, cat: 'p.custom', ver: s.ver || '0.1.0', lat: s.lat || 1, on: !!s.on, params: s.params || {}, builtin: false, lang: s.lang === 'py' ? 'py' : 'js', code: String(s.code || '') }); });
+  Object.keys(by).forEach(id => {
+    const s = by[id]; if (s.builtin || !PL.ID.test(String(s.id))) return;
+    const lang = s.lang === 'py' ? 'py' : 'js', nf = Array.isArray(s.files) ? normFiles(s.files) : null;
+    out.push({ id: s.id, cat: 'p.custom', ver: PL.VER.test(s.ver || '') ? s.ver : '0.1.0', lat: s.lat || 1, on: !!s.on, params: s.params && typeof s.params === 'object' ? s.params : {}, builtin: false, lang, entry: String(s.entry || entryOf(lang)), code: String(s.code || ''), files: nf && nf.ok ? nf.files : undefined });
+  });
   return out;
 }
 let plugs = plugMerge(load(KEY.plug, null));
 const plug = {
-  list: () => plugs, get: id => plugs.find(p => p.id === id) || null, enabled: id => { const p = plug.get(id); return !!(p && p.on); },
+  list: () => plugs, get: id => plugs.find(p => p.id === id) || null, enabled: id => { const p = plug.get(id); return !!(p && p.on); }, tree: id => { const p = plug.get(id); return p ? plugTree(p).map(f => ({ path: f.path, text: f.text })) : []; },
   setOn(id, on) { const p = plug.get(id); if (!p) return null; const old = p.on; p.on = !!on; save(KEY.plug, plugs); emit('abai:plugins', { id, on: p.on, old }); return { old, value: p.on }; },
-  setParams(id, params) { const p = plug.get(id); if (!p) return null; const old = p.params; p.params = params; save(KEY.plug, plugs); emit('abai:plugins', { id, params, oldParams: old }); return { old, value: params }; },
+  setParams(id, params) { const p = plug.get(id); if (!p) return null; const old = p.params; p.params = params; syncManifest(p); save(KEY.plug, plugs); emit('abai:plugins', { id, params, oldParams: old }); return { old, value: params }; },
+  /* Правка исходника пользовательского плагина: обновляет p.code и файл точки входа в дереве (manifest.json не трогаем).
+     → {ok, old, value} | {ok:false, reason:'NOT_FOUND'|'BUILTIN'|'FILE_BIG'|'TOTAL_BIG'} */
+  setCode(id, code) {
+    const p = plug.get(id); if (!p) return { ok: false, reason: 'NOT_FOUND' }; if (p.builtin) return { ok: false, reason: 'BUILTIN' };
+    code = String(code == null ? '' : code); if (code.length > PL.MAX_FILE) return { ok: false, reason: 'FILE_BIG' };
+    const entry = p.entry || entryOf(p.lang), files = plugTree(p).map(f => ({ path: f.path, text: f.text })), ef = files.find(f => f.path === entry);
+    if (ef) ef.text = code; else files.push({ path: entry, text: code });
+    if (files.reduce((n, f) => n + f.text.length, 0) > PL.MAX_TOTAL) return { ok: false, reason: 'TOTAL_BIG' };
+    const old = p.code; p.code = code; p.files = files; save(KEY.plug, plugs); emit('abai:plugins', { id, code: true }); return { ok: true, old, value: code };
+  },
+  /* def: {id, lang, code, params} (одиночный код) ИЛИ {files:[{path,text}]} (директория: manifest.json обязателен).
+     Ошибки: ID, DUP, FILES_EMPTY, FILES_LIMIT, FILE_BIG, PATH, MANIFEST_MISSING, MANIFEST_JSON, MANIFEST_FIELD, ENTRY_MISSING */
   add(def) {
-    if (!def || !/^[A-Za-z0-9._-]{2,40}$/.test(def.id || '') || plug.get(def.id)) return { ok: false, reason: plug.get(def && def.id) ? 'DUP' : 'ID' };
-    const p = { id: def.id, cat: 'p.custom', ver: '0.1.0', lat: 1, on: true, params: def.params || {}, builtin: false, lang: def.lang === 'py' ? 'py' : 'js', code: String(def.code || '') };
+    def = def || {}; let files = null, entry = '';
+    if (def.files) {
+      const nf = normFiles(def.files); if (!nf.ok) return nf; files = nf.files;
+      const mf = files.find(f => f.path === 'manifest.json'); if (!mf) return { ok: false, reason: 'MANIFEST_MISSING' };
+      let man; try { man = JSON.parse(mf.text); } catch (e) { return { ok: false, reason: 'MANIFEST_JSON' }; }
+      if (!man || typeof man !== 'object' || !PL.ID.test(String(man.name || '')) || !PL.VER.test(String(man.version || '')) || ['js', 'py'].indexOf(man.runtime) < 0) return { ok: false, reason: 'MANIFEST_FIELD' };
+      entry = normPath(man.entry || entryOf(man.runtime)); const ef = files.find(f => f.path === entry); if (!ef) return { ok: false, reason: 'ENTRY_MISSING', entry };
+      def = { id: man.name, lang: man.runtime, ver: man.version, params: man.params && typeof man.params === 'object' ? man.params : {}, code: ef.text };
+    }
+    if (!PL.ID.test(String(def.id || ''))) return { ok: false, reason: 'ID' };
+    if (plug.get(def.id)) return { ok: false, reason: 'DUP' };
+    const lang = def.lang === 'py' ? 'py' : 'js', p = { id: def.id, cat: 'p.custom', ver: PL.VER.test(def.ver || '') ? def.ver : '0.1.0', lat: 1, on: true, params: def.params || {}, builtin: false, lang, entry: entry || entryOf(lang), code: String(def.code || ''), files: files || undefined };
+    if (!p.files) p.files = plugTree(p);
     plugs.push(p); save(KEY.plug, plugs); emit('abai:plugins', { id: p.id, added: true }); return { ok: true, plugin: p };
   },
-  remove(id) { const p = plug.get(id); if (!p || p.builtin) return false; plugs = plugs.filter(x => x !== p); save(KEY.plug, plugs); emit('abai:plugins', { id, removed: true }); return true; }
+  remove(id) { const p = plug.get(id); if (!p || p.builtin) return false; plugs = plugs.filter(x => x !== p); save(KEY.plug, plugs); emit('abai:plugins', { id, removed: true }); return true; },
+  LIMITS: Object.freeze({ files: PL.MAX_FILES, file: PL.MAX_FILE, total: PL.MAX_TOTAL })
 };
+
+/* ======================= РАСКЛАДКИ ГРАФА ПО user.id (не привилегированные данные: localStorage допустим) ======================= */
+const layoutOk = m => m && typeof m === 'object' && !Array.isArray(m);
+const layout = {
+  all: () => { const a = load(KEY.layout, {}); return layoutOk(a) ? a : {}; },
+  get(uid) { const m = layout.all()[String(uid)]; return layoutOk(m) ? m : null; },
+  set(uid, map) {                                                                                            // map: {nodeId: [x, y] | {x, y, pin?}} → нормализуется в [x, y, pin]
+    if (!uid || !layoutOk(map)) return false; const out = {}; let n = 0;
+    Object.keys(map).forEach(id => {
+      if (n >= 64 || !/^[A-Za-z0-9_.-]{1,40}$/.test(id)) return; const v = map[id], x = Array.isArray(v) ? +v[0] : +(v && v.x), y = Array.isArray(v) ? +v[1] : +(v && v.y), pin = Array.isArray(v) ? !!v[2] : !!(v && v.pin);
+      if (isFinite(x) && isFinite(y) && Math.abs(x) < 1e5 && Math.abs(y) < 1e5) { out[id] = [Math.round(x * 10) / 10, Math.round(y * 10) / 10, pin ? 1 : 0]; n++; }
+    });
+    const a = layout.all(); a[String(uid)] = out; save(KEY.layout, a); return true;
+  },
+  clear(uid) { const a = layout.all(); const had = String(uid) in a; delete a[String(uid)]; save(KEY.layout, a); return had; }
+};
+
+/* ======================= СЕССИЯ: иммутабельный объект в памяти ======================= */
+const Session = (function () {
+  let tok = '', cur = null, memoAt = 0, rejected = '';
+  const timers = new Set();
+  const ss = () => { try { return g.sessionStorage; } catch (e) { return null; } };
+  const permList = p => DB().PERMS.filter(k => p && p[k] === true);
+  function adopt(token, state) {
+    const r = DB().verifySession(token); if (!r.ok) return null;
+    const p = r.payload, u = r.user, perms = {}; DB().PERMS.forEach(k => { perms[k] = (p.pm || []).indexOf(k) >= 0; });
+    tok = token; memoAt = Date.now();
+    cur = Object.freeze({ sid: p.sid, via: p.via, iat: p.iat * 1000, exp: p.exp * 1000,
+      user: Object.freeze({ id: u.id, login: u.login, code: u.code, fio: u.fio, role: u.role, roleLabel: u.roleLabel, perms: Object.freeze(perms) }) });
+    const s = ss(); if (s) { try { s.setItem(SESS_KEY, token); } catch (e) { /* квота: сессия живёт в памяти */ } }
+    if (state) emit('abai:session', { state, sid: cur.sid });
+    return cur;
+  }
+  function kill(reason) { const had = !!cur; wipe(); if (had) emit('abai:session', { state: 'end', reason: reason || 'logout' }); return had; }
+  function wipe() {
+    cur = null; tok = ''; memoAt = 0;
+    timers.forEach(t => { clearTimeout(t.id); clearInterval(t.id); }); timers.clear();
+    const s = ss(); if (s) { try { s.removeItem(SESS_KEY); } catch (e) { /* ok */ } }
+    try { DB().wipeSession(); } catch (e) { /* ok */ }
+  }
+  /* повторная криптопроверка токена — не чаще раза в 1.2 с (HMAC дорог, а has() вызывается из отрисовки) */
+  function alive() {
+    if (!cur) return false; const now = Date.now();
+    if (now >= cur.exp) { kill('expired'); return false; }
+    if (now - memoAt > 1200) { const r = DB().verifySession(tok); if (!r.ok || r.payload.sid !== cur.sid || permList(cur.user.perms).join() !== (r.payload.pm || []).join()) { kill('tamper'); return false; } memoAt = now; }
+    return true;
+  }
+  const reg = (fn, ms, once) => {
+    const rec = { id: 0 };
+    const run = () => { if (once) timers.delete(rec); if (cur) { try { fn(); } catch (e) { setTimeout(() => { throw e; }); } } };
+    rec.id = once ? setTimeout(run, ms) : setInterval(run, ms); timers.add(rec); return rec.id;
+  };
+  const api = {
+    /* вход: token выдаёт «сервер» (UsersDB.authenticate / qr.redeem / pin.redeem); возвращает замороженный вид сессии или null */
+    start(token) { wipe(); return adopt(token, 'start'); },
+    /* восстановление после F5: токен из sessionStorage проходит ту же криптопроверку; чужой / просроченный / подделанный — стирается */
+    restore() {
+      const s = ss(); let t = null; try { t = s ? s.getItem(SESS_KEY) : null; } catch (e) { t = null; }
+      rejected = ''; if (!t) return null;
+      const v = adopt(t, 'restore');
+      if (!v) {                                                                                           // токен был, но не прошёл криптопроверку: ключ стирается, причину покажет экран входа
+        const r = DB().verifySession(t); rejected = r && r.reason === 'EXPIRED' ? 'expired' : 'tamper';
+        try { s.removeItem(SESS_KEY); } catch (e) { /* ok */ }
+        if (rejected === 'tamper') emit('abai:tamper', { key: SESS_KEY });                                // в журнал аудита: «Подмена данных «abai.s.tok» …»
+      }
+      return v;
+    },
+    /* причина последнего отказа при восстановлении: '' | 'expired' | 'tamper' (читается один раз) */
+    rejected() { const r = rejected; rejected = ''; return r; },
+    end: reason => kill(reason || 'logout'),
+    get user() { return alive() ? cur.user : null; },
+    get info() { return alive() ? cur : null; },
+    has: perm => alive() && cur.user.perms[perm] === true,
+    isAdmin: () => alive() && cur.user.role === 'admin',
+    active: () => alive(),
+    bearer: () => (alive() ? tok : ''),
+    /* «сервер» перевыпускает токен с актуальной матрицей прав (после изменения RBAC); срок жизни не продлевается */
+    refresh() { if (!alive()) return null; const t = DB().reissue(tok); return t ? adopt(t, 'refresh') : null; },
+    expiresIn: () => (alive() ? Math.max(0, cur.exp - Date.now()) : 0),
+    age: () => (alive() ? Date.now() - cur.iat : 0),
+    /* таймеры сессии: гасятся целиком при end() */
+    interval: (fn, ms) => reg(fn, ms, false), timeout: (fn, ms) => reg(fn, ms, true),
+    clear(id) { timers.forEach(t => { if (t.id === id) { clearTimeout(id); clearInterval(id); timers.delete(t); } }); },
+    timers: () => timers.size
+  };
+  return Object.freeze(api);
+})();
+/* сторож срока и подмены: единственный «постоянный» таймер, он сам не хранит ничего о пользователе */
+setInterval(() => { Session.active(); }, 5000);
+g.addEventListener('abai:tamper', e => { try { log({ sys: true, cat: 'SECURITY', k: 'ev.sec.tamper', p: { key: (e.detail && e.detail.key) || '?' }, node: (e.detail && e.detail.key) || '', old: '', nw: 'RESET' }); } catch (err) { /* журнал ещё не готов */ } });
 
 /* ======================= ЖУРНАЛ АУДИТА ======================= */
 const SYS = { userId: 'SYS', user: 'PINN-Core', role: 'system' };
 const undoers = {};
 let audit = load(KEY.audit, null);
-const curUser = () => (g.AuthApp && g.AuthApp.user && g.AuthApp.user()) || null;
+const curUser = () => Session.user;
 const nextId = () => { let m = 104200; audit.forEach(e => { const n = +String(e.id).replace(/\D/g, ''); if (n > m) m = n; }); return 'TX-' + (m + 1); };
 function log(e) {
   const u = e.sys ? null : (e.userObj || curUser());
@@ -179,11 +339,11 @@ const auditApi = {
   list: () => audit, count: () => audit.length, find: id => audit.find(e => e.id === id) || null,
   registerUndo: (kind, fn) => { undoers[kind] = fn; },
   rollback(id) {
-    const e = audit.find(x => x.id === id), u = curUser();
+    const e = audit.find(x => x.id === id);
     if (!e) return { ok: false, reason: 'NOT_FOUND' };
     if (e.rb) return { ok: false, reason: 'DONE' };
     if (!e.undo) return { ok: false, reason: 'NO_UNDO' };
-    if (!u || !(DB().permsOf(u.id) || {}).CAN_ROLLBACK_LOGS) return { ok: false, reason: 'PERM' };
+    if (!Session.has('CAN_ROLLBACK_LOGS')) return { ok: false, reason: 'PERM' };                              // право берётся ТОЛЬКО из иммутабельной сессии
     const fn = undoers[e.undo.kind]; if (!fn) return { ok: false, reason: 'NO_HANDLER' };
     const r = fn(e.undo.data, e); if (!r) return { ok: false, reason: 'FAILED' };
     e.rb = true; save(KEY.audit, audit);
@@ -204,24 +364,32 @@ function download(name, text, mime) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
 }
 const stamp = () => { const d = new Date(Date.now() + tzOffset() * 36e5); return d.getUTCFullYear() + pad(d.getUTCMonth() + 1) + pad(d.getUTCDate()) + '-' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()); };
+/* Бэкап НЕ содержит прав доступа (perms), паролей, хешей, токенов. Импорт применяет каждый раздел только при наличии права в сессии:
+   уставки → CAN_EDIT_PINN, плагины → CAN_MANAGE_PLUGINS, журнал → CAN_ROLLBACK_LOGS; настройки интерфейса, раскладки графа и заявки — всем вошедшим.
+   Без входа импорт невозможен. Пропущенные разделы возвращаются в result.skipped. */
 const backup = {
-  data: () => ({ app: 'ARCTIC BUSBAR AI', version: VERSION, ts: Date.now(), settings: Object.assign({}, settings), thresholds: Object.assign({}, thr), plugins: clone(plugs), audit: clone(audit), users: DB().snapshot() }),
-  export() { const d = backup.data(); download('arctic-busbar-backup-' + stamp() + '.json', JSON.stringify(d, null, 2), 'application/json'); return d; },
+  data: () => ({ app: 'ARCTIC BUSBAR AI', version: VERSION, ts: Date.now(), settings: Object.assign({}, settings), thresholds: Object.assign({}, thr), plugins: clone(plugs), audit: clone(audit), layouts: layout.all(), users: DB().snapshot() }),
+  export() { if (!Session.active()) return null; const d = backup.data(); download('arctic-busbar-backup-' + stamp() + '.json', JSON.stringify(d, null, 2), 'application/json'); return d; },
   import(text) {
+    if (!Session.active()) return { ok: false, reason: 'AUTH' };
+    if (typeof text === 'string' && text.length > 8 * 1024 * 1024) return { ok: false, reason: 'FORMAT' };
     let d; try { d = typeof text === 'string' ? JSON.parse(text) : text; } catch (e) { return { ok: false, reason: 'JSON' }; }
     if (!d || d.app !== 'ARCTIC BUSBAR AI' || !Array.isArray(d.audit)) return { ok: false, reason: 'FORMAT' };
+    const skipped = [];
     Object.keys(DEFAULTS).forEach(k => { settings[k] = sane(k, d.settings && k in d.settings ? d.settings[k] : DEFAULTS[k]); });
     save(KEY.settings, settings);
-    thr = Object.assign(thrDefaults(), d.thresholds || {}); Object.keys(THR).forEach(k => { if (!isFinite(+thr[k])) thr[k] = THR[k].def; }); save(KEY.thr, thr);
-    plugs = plugMerge(d.plugins); save(KEY.plug, plugs);
-    audit = d.audit.filter(e => e && e.id && e.ts).slice(0, AUDIT_CAP); save(KEY.audit, audit);
+    if (Session.has('CAN_EDIT_PINN')) { thr = Object.assign(thrDefaults(), d.thresholds || {}); Object.keys(THR).forEach(k => { if (!isFinite(+thr[k]) || +thr[k] < THR[k].min || +thr[k] > THR[k].max) thr[k] = THR[k].def; else thr[k] = +thr[k]; }); save(KEY.thr, thr); } else skipped.push('thresholds');
+    if (Session.has('CAN_MANAGE_PLUGINS')) { plugs = plugMerge(d.plugins); save(KEY.plug, plugs); } else skipped.push('plugins');
+    if (Session.has('CAN_ROLLBACK_LOGS')) { audit = d.audit.filter(e => e && e.id && e.ts).slice(0, AUDIT_CAP); save(KEY.audit, audit); } else skipped.push('audit');
+    if (layoutOk(d.layouts)) { const cur = layout.all(); Object.keys(d.layouts).forEach(uid => { if (/^[0-9A-Za-z_-]{1,20}$/.test(uid) && layoutOk(d.layouts[uid])) { const keep = cur[uid]; layout.set(uid, d.layouts[uid]); if (!layout.get(uid) && keep) layout.set(uid, keep); } }); }
     if (d.users) DB().restore(d.users);
     Object.keys(DEFAULTS).forEach(applySetting); emit('abai:restored', { reason: 'import', version: d.version });
-    log({ cat: 'CONFIG', k: 'ev.cfg.restore', node: 'backup.json', old: '', nw: 'OK' });
-    return { ok: true, audit: audit.length, version: d.version };
+    log({ cat: 'CONFIG', k: 'ev.cfg.restore', node: 'backup.json', old: skipped.join(','), nw: skipped.length ? 'PARTIAL' : 'OK' });
+    return { ok: true, audit: audit.length, version: d.version, skipped };
   },
   resetDemo() {
-    thr = thrDefaults(); save(KEY.thr, thr); plugs = plugMerge(null); save(KEY.plug, plugs); audit = seedAudit(); save(KEY.audit, audit); DB().resetDemo();
+    if (!DB().DEMO || !Session.isAdmin()) return false;                                                       // сброс демо-данных — только в DEMO_MODE и только администратору
+    thr = thrDefaults(); save(KEY.thr, thr); plugs = plugMerge(null); save(KEY.plug, plugs); audit = seedAudit(); save(KEY.audit, audit); save(KEY.layout, {}); DB().resetDemo();
     emit('abai:restored', { reason: 'reset' }); log({ cat: 'CONFIG', k: 'ev.cfg.reset', node: 'demo', old: '', nw: 'OK' }); return true;
   },
   size() { let n = 0; try { for (let i = 0; i < g.localStorage.length; i++) { const k = g.localStorage.key(i); if (k && k.indexOf('abai.') === 0) n += (k.length + (g.localStorage.getItem(k) || '').length) * 2; } } catch (e) { n = JSON.stringify(backup.data()).length * 2; } return n; },
@@ -229,9 +397,14 @@ const backup = {
 };
 
 /* ======================= запуск ======================= */
-function init() { Object.keys(DEFAULTS).forEach(applySetting); if (g.I18N) g.I18N.apply(document); }
-g.Store = { VERSION, DEFAULTS, THR, TZ, get, set, settings: get, tzOffset, tzLabel, fmtClock, fmtDT, toInput, fromInput, palette, rgba,
-  thr: { all: () => Object.assign({}, thr), get: k => thr[k], set: thrSet, fmt: thrFmt, reset: () => { thr = thrDefaults(); save(KEY.thr, thr); } },
-  plugins: plug, audit: auditApi, log, backup, init };
+function init() {
+  Object.keys(DEFAULTS).forEach(applySetting); if (g.I18N) g.I18N.apply(document);
+  DB().integrity(true).forEach(k => log({ sys: true, cat: 'SECURITY', k: 'ev.sec.tamper', p: { key: k }, node: k, old: '', nw: 'RESET' }));   // подмена, найденная ещё до загрузки Store
+}
+/* Store и его подсистемы заморожены, а сам window.Store — свойство без права записи/удаления: из консоли его не подменить */
+const API = Object.freeze({ VERSION, DEFAULTS, THR, TZ, get, set, settings: get, tzOffset, tzLabel, fmtClock, fmtDT, toInput, fromInput, palette, rgba,
+  thr: Object.freeze({ all: () => Object.assign({}, thr), get: k => thr[k], set: thrSet, fmt: thrFmt, reset: () => { thr = thrDefaults(); save(KEY.thr, thr); } }),
+  plugins: Object.freeze(plug), audit: Object.freeze(auditApi), layout: Object.freeze(layout), session: Session, log, backup: Object.freeze(backup), init });
+try { Object.defineProperty(g, 'Store', { value: API, writable: false, configurable: false, enumerable: true }); } catch (e) { g.Store = API; }
 init();
 })(window);

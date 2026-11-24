@@ -1,12 +1,22 @@
-/* ARCTIC BUSBAR AI v2.4.0-prod: scripts/frost-drops.js
+/* ARCTIC BUSBAR AI v2.4.0-prod: scripts/auth/frost-drops.js  (ЭТАП 3)
    Капли конденсата на стекле: рост от конденсации → срыв при критическом радиусе → скольжение с инерцией, «прилипанием»,
    микро-отклонением (процесс Орнштейна-Уленбека), потерей объёма на дорожку и мелкими каплями-бусинами вдоль пути;
    слияние с сохранением площади и импульсом ускорения. Отрисовка: тень, преломлённая ПЕРЕВЁРНУТАЯ картинка сцены внутри капли,
-   внутренняя тень, блики и каустика. API: window.FrostDrops.create(W, H, rand) → { step, draw, nudge, resize, drops }.
+   внутренняя тень, блики и каустика.
+
+   ЭТАП 3 — мазок пальцем / мышью (touch + mouse):
+     sweep(sk, x0,y0, x1,y1, rad, kill) — все капли в полосе мазка (расстояние до отрезка ≤ rad + 0.85·r) стягиваются в одну «каплю-собирательницу»,
+       которую палец толкает перед собой: она впитывает соседние капли (сумма площадей), понемногу забирает влагу с самого запотевания
+       и, дорастя до критического радиуса (11.5–14.5 px), срывается и стекает вниз. Ни одна капля не остаётся висеть над расчищенной дорожкой.
+       Режим kill (prefers-reduced-motion, без анимации) просто стирает капли в полосе.
+     release(sk) — палец отпущен: собирательница стекает (если ≥ 4.6 px) либо остаётся мелкой бусиной.
+       Если мазок «замер» (нет событий > 0.5 с), собирательница стекает сама под своим весом (step()).
+   API: window.FrostDrops.create(W, H, rand) → { step, draw, nudge, resize, sweep, release, drops, state, populate }.
    Дорожки не рисуются здесь: step() вызывает trail(x0, y0, x1, y1, width) — маску стирания запотевания ведёт frost-canvas.js. */
 (function (g) {
 'use strict';
 const TAU = Math.PI * 2, BIG = 3.4;                                           // r ≥ BIG — «крупная» капля с преломлением
+const SLIDE_MIN = 4.6;                                                        // собирательница тоньше — просто бусина, не стекает
 
 function bead(tint) {                                                         // спрайт мелкой капли 64×64 (радиус тела 22)
   const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
@@ -19,12 +29,17 @@ function bead(tint) {                                                         //
 }
 const SPRITES = ['196,226,255', '255,226,190', '190,255,230'].map(bead);
 
+function segDist(px, py, x0, y0, x1, y1) {                                    // расстояние от точки до отрезка
+  const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy; let t = l2 ? ((px - x0) * dx + (py - y0) * dy) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
+}
+
 function create(W, H, R) {
   const S = { W, H, t: 0, frame: 0, spawn: 0, top: 0, drops: [] };
   const kA = () => Math.max(.35, Math.min(1.3, S.W * S.H / (1920 * 1080)));
   const rand = (a, b) => a + R() * (b - a);
   const mk = (x, y, r, o) => Object.assign({ x, y, r, vx: 0, vy: 0, slide: false, rc: rand(7.5, 12.5), grow: rand(.03, .42) * (r < 4 ? .35 : 1), boost: 0, pause: 0, wob: 0,
-    wph: R() * TAU, leak: rand(.7, 1.45), dist: 0, dead: false, tint: R() < .6 ? 0 : (R() < .5 ? 1 : 2) }, o || {});
+    wph: R() * TAU, leak: rand(.7, 1.45), dist: 0, dead: false, carried: false, hold: 0, rel: 0, imm: 0, tint: R() < .6 ? 0 : (R() < .5 ? 1 : 2) }, o || {});
   const spawnOne = heavy => { S.drops.push(mk(R() * S.W, rand(-10, S.H * .55), heavy ? rand(9, 13.5) : rand(4.5, 8.5), heavy ? { slide: true, vy: 16 } : null)); };
 
   function populate() {
@@ -40,12 +55,43 @@ function create(W, H, R) {
     big.vy += 8 + small.r * 1.4; if (!big.slide && big.r >= big.rc * .9) { big.slide = true; big.vy = Math.max(big.vy, 18); }
     small.dead = true;
   }
+
+  /* ---------- мазок: собирательница ---------- */
+  function liberate(d) {                                                      // собирательница отпущена: срывается и стекает (или остаётся бусиной)
+    d.carried = false; d.hold = 0; d.imm = S.t + 1.2;                         // ~1 с капля неприкосновенна: иначе следующий отрезок мазка тут же подберёт её обратно
+    if (d.r >= SLIDE_MIN) { d.slide = true; d.vy = 12 + 1.6 * d.r; d.vx = 0; d.boost = 1.1; d.rc = d.r; d.wob = Math.max(d.wob, .6); d.pause = 0; d.dist = 0; }
+    else { d.slide = false; d.vy = 0; d.vx = 0; d.rc = d.r + rand(5, 9); d.grow = rand(.05, .3); }
+  }
+  function take(d) { d.carried = true; d.slide = false; d.vx = 0; d.vy = 0; d.hold = S.t; d.rel = rand(11.5, 14.5); d.boost = 0; return d; }
+  function gather(col, d) { col.r = Math.sqrt(col.r * col.r + d.r * d.r * .9); col.wob = 1; d.dead = true; }
+  function sweep(sk, x0, y0, x1, y1, rad, kill) {
+    const D = S.drops; let col = sk.col, n = 0;
+    if (col && (col.dead || !col.carried)) col = sk.col = null;
+    const mnx = Math.min(x0, x1) - rad - 13, mxx = Math.max(x0, x1) + rad + 13, mny = Math.min(y0, y1) - rad - 13, mxy = Math.max(y0, y1) + rad + 13, len = Math.hypot(x1 - x0, y1 - y0);
+    for (let i = 0; i < D.length; i++) {
+      const d = D[i]; if (d.dead || d.carried || d === col || (d.imm > S.t && !kill) || d.x < mnx || d.x > mxx || d.y < mny || d.y > mxy) continue;
+      if (segDist(d.x, d.y, x0, y0, x1, y1) > rad + d.r * .85) continue;
+      n++; if (kill) { d.dead = true; continue; }
+      if (!col) { col = sk.col = take(d); continue; }
+      if (d.r > col.r) { const old = col; col = sk.col = take(d); gather(col, old); old.carried = false; } else gather(col, d);        // крупная капля сама становится собирательницей
+    }
+    if (kill) return n;
+    if (!col && len > .5) { col = sk.col = take(mk(x1, y1, 1.5, null)); D.push(col); }                       // мазок без капель: влага стягивается с самого запотевания
+    if (!col) return n;
+    col.r = Math.sqrt(col.r * col.r + len * .22);                                                            // забирает влагу с дорожки
+    col.hold = S.t; col.x += (x1 - col.x) * .6; col.y += (y1 + col.r * .45 - col.y) * .6;                    // толкается перед пальцем
+    if (col.r >= col.rel) { liberate(col); sk.col = null; }                                                   // набрала вес — срывается и бежит вниз
+    return n;
+  }
+  function release(sk) { const c = sk && sk.col; if (c && !c.dead && c.carried) liberate(c); if (sk) sk.col = null; }
+
   function step(dt, trail) {
     S.t += dt; S.frame++; const D = S.drops, k = kA();
     if ((S.spawn -= dt) <= 0) { S.spawn = rand(.35, .95) / k; spawnOne(R() < .26); }
     if ((S.top -= dt) <= 0) { S.top = 1; let n = 0; D.forEach(d => { if (d.slide && !d.dead) n++; }); if (n < 13 * k) spawnOne(true); }
     for (let i = 0; i < D.length; i++) {
       const d = D[i]; if (d.dead) continue; d.wob *= Math.exp(-dt * 3.2);
+      if (d.carried) { if (S.t - d.hold > .5) liberate(d); continue; }                                       // палец замер — собирательница стекает сама
       if (!d.slide) { if (d.r < 7.8) d.r += d.grow * dt * (1 - d.r / 13); if (d.r >= d.rc) { d.slide = true; d.vy = 6; } continue; }
       const over = Math.max(0, d.r - 3.2); let vt = (7 + 7.8 * over) * (1 + d.boost);
       if (d.pause > 0) { d.pause -= dt; vt = 0; } else if (d.r < 8.8 && R() < dt * .35) d.pause = rand(.25, 1.1);   // прилипание–скольжение
@@ -58,17 +104,17 @@ function create(W, H, R) {
       if (d.r < 4.1) { d.slide = false; d.vy = 0; d.vx = 0; d.rc = d.r + rand(5, 9); d.grow = rand(.05, .3); }     // капля иссякла и замерла в конце дорожки
       else if (d.y - d.r > S.H + 24) d.dead = true;
       for (let j = 0; j < D.length; j++) {                                                               // слияние с соседями на пути
-        const o = D[j]; if (o === d || o.dead || d.dead) continue; const dx = o.x - d.x; if (dx > d.r + 18 || dx < -d.r - 18) continue;
+        const o = D[j]; if (o === d || o.dead || d.dead || o.carried) continue; const dx = o.x - d.x; if (dx > d.r + 18 || dx < -d.r - 18) continue;
         if (Math.hypot(dx, o.y - d.y) < (d.r + o.r) * .82) { if (d.r >= o.r) absorb(d, o); else absorb(o, d); }
       }
     }
     if (S.frame % 12 === 0) {                                                                            // слияние растущих неподвижных
-      const m = D.filter(d => !d.dead && !d.slide && d.r >= 2.2);
+      const m = D.filter(d => !d.dead && !d.slide && !d.carried && d.r >= 2.2);
       for (let a = 0; a < m.length; a++) for (let b = a + 1; b < m.length; b++) { const p = m[a], q = m[b]; if (p.dead || q.dead) continue; if (Math.hypot(p.x - q.x, p.y - q.y) < (p.r + q.r) * .8) { if (p.r >= q.r) absorb(p, q); else absorb(q, p); } }
     }
     if (S.frame % 30 === 0) {                                                                            // уборка и лимит мелких
-      let w = 0, tiny = 0; for (let i = 0; i < D.length; i++) { const d = D[i]; if (d.dead) continue; D[w++] = d; if (d.r < BIG && !d.slide) tiny++; } D.length = w;
-      const cap = Math.round(430 * k); for (let i = 0; i < D.length && tiny > cap; i++) if (D[i].r < BIG && !D[i].slide && R() < .3) { D[i].dead = true; tiny--; }
+      let w = 0, tiny = 0; for (let i = 0; i < D.length; i++) { const d = D[i]; if (d.dead) continue; D[w++] = d; if (d.r < BIG && !d.slide && !d.carried) tiny++; } D.length = w;
+      const cap = Math.round(430 * k); for (let i = 0; i < D.length && tiny > cap; i++) if (D[i].r < BIG && !D[i].slide && !D[i].carried && R() < .3) { D[i].dead = true; tiny--; }
     }
   }
   function drawBig(c, d, sharp, ss, ox, oy) {                                                            // ox, oy — сдвиг стекла относительно сцены (параллакс)
@@ -92,10 +138,10 @@ function create(W, H, R) {
     for (let i = 0; i < D.length; i++) { const d = D[i]; if (d.dead || d.r >= BIG || d.x < -8 || d.x > vw + 8 || d.y < -8 || d.y > vh + 8) continue; const s = d.r * 2.91; c.drawImage(SPRITES[d.tint], d.x - s / 2, d.y - s / 2, s, s); }
     for (let i = 0; i < D.length; i++) { const d = D[i]; if (d.dead || d.r < BIG || d.x < -20 || d.x > vw + 20 || d.y < -20 || d.y > vh + 20) continue; drawBig(c, d, sharp, ss, ox, oy); }
   }
-  function nudge(a) { a = a || 1; S.drops.forEach(d => { if (d.r >= BIG) { d.wob = Math.min(1, d.wob + .8 * a); if (d.slide) d.boost = Math.min(1.5, d.boost + .5 * a); else if (R() < .2 * a) d.rc = d.r * .96; } }); spawnOne(true); }
+  function nudge(a) { a = a || 1; S.drops.forEach(d => { if (d.r >= BIG && !d.carried) { d.wob = Math.min(1, d.wob + .8 * a); if (d.slide) d.boost = Math.min(1.5, d.boost + .5 * a); else if (R() < .2 * a) d.rc = d.r * .96; } }); spawnOne(true); }
   function resize(w, h) { const sx = w / S.W, sy = h / S.H; S.drops.forEach(d => { d.x *= sx; d.y *= sy; }); S.W = w; S.H = h; }
   populate();
-  return { step, draw, nudge, resize, drops: S.drops, state: S, populate };
+  return { step, draw, nudge, resize, sweep, release, drops: S.drops, state: S, populate };
 }
-g.FrostDrops = { create, BIG };
+g.FrostDrops = { create, BIG, SLIDE_MIN };
 })(window);

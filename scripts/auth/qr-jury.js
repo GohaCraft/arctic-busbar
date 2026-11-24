@@ -1,19 +1,26 @@
-/* ARCTIC BUSBAR AI v2.4.0-prod: scripts/qr-jury.js
-   Выдвижная панель комиссии: настоящий QR (qr-encoder.js) на #qrCanvas, 6-значный код с окном 30 с и полоской таймера,
+/* ARCTIC BUSBAR AI v2.4.0-prod: scripts/auth/qr-jury.js
+   Выдвижная панель входа по QR / коду: настоящий QR (qr-encoder.js) на #qrCanvas, 6-значный код с окном 30 с и полоской таймера,
    вкладка «С телефона» (6 ячеек, автопереход, вставка), сканер камеры (getUserMedia + BarcodeDetector).
-   Зависит от: window.UsersDB (jury.*, juryLink, devices, countDevice), window.QREncoder.
-   ЭТАП 2: submit() принимает и код жюри (включая универсальный PIN), и ПЕРСОНАЛЬНЫЙ 6-значный PIN аккаунта (UsersDB.session) — тогда вход строго в этот аккаунт.
-   Ссылки: ?qr_auth=jury_session&code=XXXXXX (жюри) и ?qr_auth=session&uid=<ID>&code=XXXXXX (личный вход с телефона).
-   События (window): abai:jury-ok {via: 'test'|'code'|'scan'|'link'}, abai:session-ok {user, via: 'code'|'scan'|'link'}, abai:jury-fail {via}. Вход выполняет auth.js. */
+   Зависит от: window.UsersDB (jury.*, qr.*, pin.*), window.QREncoder.
+
+   ЭТАП 3 — ZERO TRUST:
+   • В ссылке больше НЕТ открытого кода (?code=123456 запрещён). QR кодирует <адрес>#abai-qr=<JWT-образный токен HS256>:
+     подпись, срок жизни, тип, одноразовый jti. Токен в #-части не попадает на сервер / в логи / в Referer и стирается из адресной строки сразу после чтения.
+   • Старые ссылки ?qr_auth=…&code=… отвергаются явно (сообщение «ссылка устарела»).
+   • Витрина жюри (QR на экране стенда, код, универсальный PIN, кнопка «Тестовый вход») существует только при DEMO_MODE === true.
+     В боевом режиме панель остаётся приёмной стороной: ввод 6-значного PIN из профиля сотрудника и сканирование его личного QR.
+   • Все ответы «сервера» (UsersDB) содержат токен сессии; вход выполняет auth.js по событию.
+   События (window): abai:session-ok {user, token, kind:'personal'|'jury', via:'code'|'scan'|'link'|'test'}, abai:jury-fail {via}. */
 (function (g) {
 'use strict';
 const $ = id => document.getElementById(id), qa = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
 const DB = () => g.UsersDB, T = (k, p) => (g.I18N ? g.I18N.t(k, p) : k);
+const DEMO = !!(g.ABAI_CONFIG && g.ABAI_CONFIG.DEMO_MODE === true);
 const emit = (name, detail) => g.dispatchEvent(new CustomEvent(name, { detail }));
 
-/* ---------- QR: лучший уровень коррекции из помещающихся (H → Q → M → L) ---------- */
+/* ---------- QR: лучший уровень коррекции из помещающихся (Q → M → M/12 → L/13); токен-ссылка ≈ 190–210 байт ---------- */
 function encodeBest(text) {
-  const plan = [['H', 9], ['Q', 10], ['M', 10], ['L', 10]];
+  const plan = [['Q', 10], ['M', 10], ['M', 12], ['L', 13]];
   for (let i = 0; i < plan.length; i++) { try { return g.QREncoder.encode(text, { ecc: plan[i][0], maxVersion: plan[i][1], minVersion: 4 }); } catch (e) { /* пробуем слабее */ } }
   throw new Error(T('qr.toolong'));
 }
@@ -57,21 +64,21 @@ function drawQR(cv, qr, opt) {
 }
 
 /* ---------- состояние панели ---------- */
-const S = { win: -1, code: '', url: '', qr: null, qrKey: '', open: false, cam: null, tab: 'pc' };
+const S = { win: -1, code: '', url: '', qr: null, open: false, cam: null, tab: DEMO ? 'pc' : 'phone' };
 const visible = el => !!(el && el.offsetParent !== null);
 function msg(kind, text) { const m = $('qrMsg'); if (!m) return; m.textContent = text; m.className = 'msg ' + kind; m.hidden = !text; }
 
 function refresh(force) {
-  const db = DB(); if (!db) return;
+  const db = DB(); if (!db || !db.jury.enabled) return;                                             // витрина жюри — только DEMO_MODE
   const w = db.jury.win();
-  if (w !== S.win || force) { S.win = w; S.code = db.jury.code(); S.url = db.juryLink(S.code); S.qr = null; }
+  if (w !== S.win || force) { S.win = w; S.code = db.jury.code(); S.url = db.jury.link(); S.qr = null; }
   const targets = qa('[data-qr]').filter(visible);
   if (targets.length && !S.qr) { try { S.qr = encodeBest(S.url); } catch (e) { msg('err', e.message); } }
   targets.forEach(cv => { const key = S.url + '|' + cv.clientWidth + '|' + (g.devicePixelRatio || 1); if (cv.dataset.key !== key && S.qr) { drawQR(cv, S.qr); cv.dataset.key = key; } });
   qa('[data-code]').forEach(bx => qa('b', bx).forEach((b, i) => {
     if (b.textContent !== S.code[i]) { b.textContent = S.code[i]; b.classList.remove('flip'); void b.offsetWidth; b.classList.add('flip'); }
   }));
-  qa('[data-qr-url]').forEach(x => { x.textContent = S.url.replace(/^https?:\/\//, ''); x.title = S.url; });
+  qa('[data-qr-url]').forEach(x => { x.textContent = S.url.replace(/^https?:\/\//, ''); x.title = T('qr.url'); });
   qa('[data-qr-devices]').forEach(x => { x.textContent = db.devices(); });
 }
 function tickTimer() {
@@ -79,10 +86,11 @@ function tickTimer() {
   qa('[data-qr-timer]').forEach(i => { i.style.transform = 'scaleX(' + left.toFixed(4) + ')'; i.parentNode.classList.toggle('low', left < 0.17); });
   qa('[data-qr-sec]').forEach(x => { x.textContent = Math.ceil(left * 30) + ' ' + T('u.s'); });
 }
-setInterval(() => { if (qa('[data-qr]').some(visible)) { refresh(false); tickTimer(); } }, 100);
+setInterval(() => { if (DEMO && qa('[data-qr]').some(visible)) { refresh(false); tickTimer(); } }, 100);
 
 /* ---------- выдвижная панель ---------- */
 function setTab(t) {
+  if (!DEMO) t = 'phone';
   S.tab = t; const dr = $('drawer'); if (!dr) return; dr.dataset.tab = t;
   qa('.tabs button', dr).forEach(b => { const on = b.dataset.tab === t; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
   if (t === 'pc') { closeCam(); refresh(true); } else { const f = qa('#otp input').find(x => !x.value) || qa('#otp input')[0]; if (f && S.open && !g.matchMedia('(pointer:coarse)').matches) f.focus(); }
@@ -92,40 +100,46 @@ function toggle(force) {
   const open = force == null ? !S.open : !!force; if (open === S.open) return;
   S.open = open; auth.dataset.drawer = open ? 'open' : 'closed'; dr.setAttribute('aria-hidden', !open); if (btn) btn.setAttribute('aria-expanded', open);
   if ('inert' in dr) dr.inert = !open;
-  if (open) { clearCells(false); setTab(g.matchMedia('(max-width:820px)').matches ? 'phone' : 'pc'); msg('', ''); setTimeout(() => { refresh(true); tickTimer(); }, 30); setTimeout(() => refresh(true), 560); }
+  if (open) { clearCells(false); setTab(DEMO && !g.matchMedia('(max-width:820px)').matches ? 'pc' : 'phone'); msg('', ''); if (DEMO) { setTimeout(() => { refresh(true); tickTimer(); }, 30); setTimeout(() => refresh(true), 560); } }
   else { closeCam(); if (btn) btn.focus({ preventScroll: true }); }
 }
 
-/* ---------- ввод кода (вкладка «С телефона») ---------- */
-function parseLink(text) {                                                                         // {code, uid?} из ссылки QR или 6 цифр
-  text = String(text || '').trim(); if (/^\d{6}$/.test(text)) return { code: text };
-  try {
-    const u = new URL(text), k = u.searchParams.get('qr_auth'), code = (u.searchParams.get('code') || '').replace(/\D/g, '');
-    if (k === 'jury_session') return { code };
-    if (k === 'session') return { code, uid: u.searchParams.get('uid') || '' };
-  } catch (e) { /* не ссылка */ }
-  const mt = /code=(\d{6})/.exec(text); return mt ? { code: mt[1] } : null;
+/* ---------- разбор введённого / отсканированного ---------- */
+/* → {code} (6 цифр) | {link} (ссылка или токен) | {legacy:true} (старая ссылка с открытым кодом) | null */
+function parseLink(text) {
+  text = String(text || '').trim(); if (!text) return null;
+  if (/^\d{6}$/.test(text)) return { code: text };
+  const db = DB(), tok = db.qr.parse(text); if (tok) return { link: tok };
+  return db.qr.isLegacy(text) ? { legacy: true } : null;
 }
-const codeFrom = text => { const r = parseLink(text); return r ? r.code : ''; };
-function bad(via) {
-  msg('err', T('auth.msg.bad'));
+const codeFrom = text => { const r = parseLink(text); return r && r.code ? r.code : ''; };
+const REASON = { EXPIRED: 'auth.link.expired', USED: 'auth.link.used', LEGACY: 'auth.link.legacy', DISABLED: 'auth.link.disabled', NOT_YET: 'auth.link.expired' };
+function bad(via, reason) {
+  msg('err', reason && REASON[reason] ? T(REASON[reason]) : T(via === 'code' ? 'auth.msg.bad' : 'auth.link.bad'));
   const row = $('otp'); if (row) { row.classList.remove('bad'); void row.offsetWidth; row.classList.add('bad'); }
-  clearCells(via === 'code'); emit('abai:jury-fail', { via }); return false;
+  clearCells(via === 'code'); emit('abai:jury-fail', { via, reason: reason || 'BAD' }); return false;
 }
-function submit(code, via, uid) {
-  const db = DB(); code = String(code || '').replace(/\D/g, '');
-  if (code.length !== 6) return bad(via);
-  if (uid) {                                                                                       // ссылка с известным аккаунтом: проверяем строго его
-    if (!db.session.verify(uid, code)) return bad(via);
-    const u = db.byId(uid); msg('ok', T('auth.msg.ok', { who: g.ScadaUI ? g.ScadaUI.fio(u) : u.fio })); if (via !== 'test') db.countDevice(); refresh(false); clearCells(false); emit('abai:session-ok', { user: u, via }); return true;
+/* res — ответ UsersDB: {ok, kind, user, token} | {ok:false, reason} */
+function finish(res, via) {
+  if (res && res.ok) {
+    const who = res.kind === 'jury' || res.user.role === 'jury' ? T('name.jury') : res.user.fio;
+    msg('ok', T('auth.msg.ok', { who })); refresh(false); clearCells(false);
+    emit('abai:session-ok', { user: res.user, token: res.token, kind: res.kind, via }); return true;
   }
-  if (db.jury.verify(code)) {
-    msg('ok', T('auth.msg.ok', { who: T('name.jury') })); if (via !== 'test') db.countDevice(); refresh(false); clearCells(false); emit('abai:jury-ok', { via }); return true;
+  if (res && res.reason === 'LOCKED') {
+    msg('err', T('auth.err.locked', { s: Math.max(1, Math.ceil(res.retryMs / 1000)) })); clearCells(false); emit('abai:jury-fail', { via, reason: 'LOCKED' }); return false;
   }
-  const hit = db.session.match(code);                                                              // персональный PIN аккаунта
-  if (hit) { msg('ok', T('auth.msg.ok', { who: hit.role === 'jury' ? T('name.jury') : hit.fio })); db.countDevice(); refresh(false); clearCells(false); emit('abai:session-ok', { user: hit, via }); return true; }
-  return bad(via);
+  return bad(via, res && res.reason);
 }
+function submit(input, via) {                                                                       // 6 цифр → PIN; иначе ссылка / токен
+  const db = DB(), p = parseLink(input);
+  if (!p) return bad(via);
+  if (p.legacy) return bad(via, 'LEGACY');
+  if (p.code) return finish(db.pin.redeem(p.code), via);
+  return finish(db.qr.redeem(p.link), via);
+}
+
+/* ---------- ввод кода (вкладка «С телефона») ---------- */
 const cells = () => qa('#otp input');
 function clearCells(focus) { cells().forEach(c => { c.value = ''; c.classList.remove('filled'); }); if (focus && cells()[0]) cells()[0].focus(); }
 function fillFrom(start, digits) {
@@ -148,8 +162,10 @@ function initCells() {
       else if (e.key === 'ArrowRight' && cs[i + 1]) { e.preventDefault(); cs[i + 1].focus(); }
     });
     c.addEventListener('paste', e => {
-      const d = ((e.clipboardData || g.clipboardData).getData('text') || '').replace(/\D/g, '').slice(0, 6);
-      if (d) { e.preventDefault(); fillFrom(0, d); }
+      const raw = ((e.clipboardData || g.clipboardData).getData('text') || '').trim();
+      const p = parseLink(raw);
+      if (p && !p.code) { e.preventDefault(); submit(raw, 'link'); return; }                         // вставлена ссылка / токен целиком
+      const d = raw.replace(/\D/g, '').slice(0, 6); if (d) { e.preventDefault(); fillFrom(0, d); }
     });
     c.addEventListener('focus', () => { try { c.select(); } catch (e) { /* ok */ } });
   });
@@ -177,7 +193,7 @@ async function openCam() {
     if (cam.stop || S.cam !== cam) return;
     try {
       const v = $('camVideo');
-      if (v.readyState >= 2) { const r = await cam.det.detect(v); for (let i = 0; i < r.length; i++) { const pl = parseLink(r[i].rawValue); if (pl && pl.code) { closeCam(); setTab('phone'); submit(pl.code, 'scan', pl.uid); return; } } }
+      if (v.readyState >= 2) { const r = await cam.det.detect(v); for (let i = 0; i < r.length; i++) { const pl = parseLink(r[i].rawValue); if (pl) { closeCam(); setTab('phone'); submit(r[i].rawValue, 'scan'); return; } } }
     } catch (e) { /* кадр не готов */ }
     cam.timer = setTimeout(loop, 180);
   };
@@ -189,9 +205,13 @@ function init() {
   const qb = $('qrBtn'), dc = $('drawerClose');
   if (qb) qb.addEventListener('click', () => toggle());
   if (dc) dc.addEventListener('click', () => toggle(false));
+  if (!DEMO) {                                                                                      // боевой режим: витрины жюри нет в DOM вообще
+    qa('#drawer .tabs button[data-tab="pc"], #drawer .tp-pc').forEach(el => el.remove());
+    const tabs = qa('#drawer .tabs')[0]; if (tabs) tabs.hidden = true;
+  }
   qa('#drawer .tabs button').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
   initCells();
-  const tj = $('qrJury'); if (tj) tj.addEventListener('click', () => { msg('ok', T('auth.msg.test')); emit('abai:jury-ok', { via: 'test' }); });
+  const tj = $('qrJury'); if (tj) tj.addEventListener('click', () => { const r = DB().jury.login(); if (r.ok) { msg('ok', T('auth.msg.test')); emit('abai:session-ok', { user: r.user, token: r.token, kind: 'jury', via: 'test' }); } });
   const cb = $('camBtn'); if (cb) cb.addEventListener('click', openCam);
   const cc = $('camClose'); if (cc) cc.addEventListener('click', closeCam);
   qa('[data-qr-url]').forEach(x => x.addEventListener('click', () => {
@@ -200,25 +220,23 @@ function init() {
   }));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('cam') && !$('cam').hidden) closeCam(); else if (S.open) toggle(false); } });
   document.addEventListener('click', e => {                                                         // клик по фону закрывает панель
-    if (S.open && e.target.closest && !e.target.closest('.card, .drawer, #cam, .modal') && e.target.closest('#auth')) toggle(false);
+    if (S.open && e.target.closest && !e.target.closest('.card, .drawer, #cam, .modal, .auth-top') && e.target.closest('#auth')) toggle(false);
   });
-  g.matchMedia('(max-width:820px)').addEventListener('change', e => { if (S.open) setTab(e.matches ? 'phone' : 'pc'); });
+  g.matchMedia('(max-width:820px)').addEventListener('change', e => { if (S.open) setTab(DEMO && !e.matches ? 'pc' : 'phone'); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) closeCam(); });
-  refresh(true); tickTimer();
+  if (DEMO) { refresh(true); tickTimer(); }
 }
-function consumeUrlAuth() {                                                                        // ?qr_auth=jury_session&code=XXXXXX  |  ?qr_auth=session&uid=ID&code=XXXXXX
+/* Вход по ссылке: <адрес>#abai-qr=<токен>. Токен читается и СРАЗУ стирается из адресной строки.
+   → null (ссылки нет) | {ok:true, user, token, kind, via:'link'} | {bad:true, reason, via:'link'} */
+function consumeUrlAuth() {
   try {
-    const sp = new URLSearchParams(g.location.search), kind = sp.get('qr_auth');
-    if (kind !== 'jury_session' && kind !== 'session') return null;
-    const code = (sp.get('code') || '').replace(/\D/g, ''), uid = sp.get('uid') || '';
+    const db = DB(), loc = g.location, sp = new URLSearchParams(loc.search), legacy = sp.has('qr_auth') || sp.has('code') || sp.has('uid');
+    const hash = loc.hash || '', hasTok = hash.indexOf(db.qr.KEY + '=') >= 0;
+    if (!hasTok && !legacy) return null;
     ['qr_auth', 'code', 'uid'].forEach(k => sp.delete(k)); const q = sp.toString();
-    try { g.history.replaceState(null, '', g.location.pathname + (q ? '?' + q : '') + g.location.hash); } catch (e) { /* file:// */ }
-    if (kind === 'session') {
-      if (DB().session.verify(uid, code)) { DB().countDevice(); return { via: 'link', user: DB().byId(uid), personal: true }; }
-      return { via: 'link', bad: true, personal: true };
-    }
-    if (DB().jury.verify(code)) { DB().countDevice(); return { via: 'link' }; }
-    return { via: 'link', bad: true };
+    try { g.history.replaceState(null, '', loc.pathname + (q ? '?' + q : '')); } catch (e) { /* file:// */ }
+    if (hasTok) { const r = db.qr.redeem(hash); return r.ok ? { ok: true, user: r.user, token: r.token, kind: r.kind, via: 'link' } : { bad: true, reason: r.reason, via: 'link' }; }
+    return { bad: true, reason: 'LEGACY', via: 'link' };
   } catch (e) { return null; }
 }
 

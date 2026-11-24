@@ -1,0 +1,105 @@
+/* ARCTIC BUSBAR AI v2.4.0-prod: styles/app/hardware-plugins.css  (ЭТАП 3)
+   Новые окна #app: «Подключение оборудования» (#mHardware: вкладка подключения и «Инструкция для инженеров») и добавление плагина папкой (#mPlugin:
+   зона перетаскивания директории, дерево файлов, проверка manifest.json). Плюс карточка «Подключить телефон» в профиле. Токены — из tokens-shadcn.css. */
+
+/* ---------- Подключение оборудования ---------- */
+.hw-status{display:flex;align-items:center;gap:14px;padding:14px 16px}
+.hw-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--subtle);transition:background var(--dur),box-shadow var(--dur)}
+.hw-status[data-s=online] .hw-dot{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft)}
+.hw-status[data-s=scanning] .hw-dot,.hw-status[data-s=connecting] .hw-dot{background:var(--warn);box-shadow:0 0 0 4px var(--warn-soft)}
+.hw-status[data-s=error] .hw-dot{background:var(--err);box-shadow:0 0 0 4px var(--err-soft)}
+.hw-st-t{display:grid;flex:1;gap:2px;min-width:0}
+.hw-st-t b{font-size:13.5px;font-weight:600}
+.hw-st-t span{font-size:12px;line-height:1.45;color:var(--muted-foreground)}
+.hw-actions{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:14px 0 4px}
+.hw-baud{display:grid;gap:4px;font-size:12px;color:var(--muted-foreground)}
+.hw-baud select{width:116px}
+.hw-sec{margin-top:18px}
+.hw-sec h4{margin-bottom:8px;font-size:12px;font-weight:500;color:var(--muted-foreground)}
+.hw-list{display:grid;gap:6px}
+.hw-dev{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card)}
+.hw-dev>.ico{width:18px;height:18px;color:var(--acc)}
+.hw-dev div{display:grid;gap:2px;min-width:0}
+.hw-dev b{font:600 12.5px/1.3 var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hw-dev span{font-size:12px;color:var(--muted-foreground)}
+.hw-dev .btn{margin-left:auto;flex:none}
+.hw-dev[data-ok="0"]>.ico{color:var(--subtle)}
+.hw-empty{margin:0;padding:14px;border:1px dashed var(--border-strong);border-radius:var(--radius);color:var(--muted-foreground);font-size:12.5px;line-height:1.5}
+.hw-ws{display:flex;gap:8px}
+.hw-ws .inp{flex:1}
+.hw-live{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.hw-live span{display:grid;gap:3px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card)}
+.hw-live small{font-size:11px;color:var(--subtle)}
+.hw-live b{font:600 15px/1.1 var(--font-mono);font-variant-numeric:tabular-nums}
+.hw-live u{text-decoration:none;font-size:11px;color:var(--muted-foreground)}
+.hw-log{max-height:124px;margin:0;overflow:auto;font-size:11.5px;white-space:pre-wrap;word-break:break-all}
+.hw-log:empty,#hwErr:empty{display:none}
+
+/* ---------- Инструкция для инженеров ---------- */
+.hw-guide{display:grid;gap:14px}
+.hw-lead{margin:0;font-size:13px;line-height:1.6;color:var(--muted-foreground)}
+.hg-step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:14px;padding:16px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--card)}
+.hg-n{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--acc-soft);color:var(--acc);border:1px solid var(--acc-line);font:600 12px/1 var(--font-mono)}
+.hg-step>div{min-width:0}
+.hg-step h4{margin-bottom:8px;font-size:14px;font-weight:600;letter-spacing:-.003em}
+.hg-step p{margin:0 0 10px;font-size:12.5px;line-height:1.6;color:var(--muted-foreground)}
+.hg-chips{display:flex;flex-wrap:wrap;gap:6px}
+.hg-chips li{padding:4px 10px;border:1px solid var(--border-strong);border-radius:999px;background:var(--accent-bg);font:500 12px/1.4 var(--font-mono)}
+.hg-twrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius)}
+.hg-table{width:100%;border-collapse:collapse;font-size:12px}
+.hg-table th{padding:8px 10px;text-align:left;font-weight:500;color:var(--muted-foreground);background:var(--card-2);border-bottom:1px solid var(--border);white-space:nowrap}
+.hg-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;line-height:1.45}
+.hg-table tbody tr:last-child td{border-bottom:0}
+.hg-table td:first-child{font:600 12px/1.45 var(--font-mono);white-space:nowrap}
+.hg-keys{margin-top:10px}
+.hg-warn{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;padding:10px 12px;border:1px solid var(--warn-line);border-radius:var(--radius);background:var(--warn-soft);color:var(--warn);font-size:12.5px;line-height:1.5}
+.hg-warn .ico{margin-top:2px}
+.hg-list{display:grid;gap:6px;margin:0;padding-left:18px;list-style:decimal;font-size:12.5px;line-height:1.55;color:var(--muted-foreground)}
+pre.code{margin:10px 0 0;padding:12px 14px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius);background:color-mix(in srgb,var(--background) 72%,transparent);font:12px/1.6 var(--font-mono);tab-size:2;white-space:pre;color:var(--foreground)}
+pre.code code{font:inherit}
+
+/* ---------- плагин папкой ---------- */
+.pk-drop{display:grid;justify-items:center;gap:8px;padding:26px 16px;text-align:center;border:1.5px dashed var(--border-strong);border-radius:var(--radius-lg);background:color-mix(in srgb,var(--background) 40%,transparent);transition:border-color var(--dur),background var(--dur)}
+.pk-drop.over{border-color:var(--acc);background:var(--acc-soft)}
+.pk-drop>.ico{width:28px;height:28px;color:var(--acc)}
+.pk-drop b{font-size:14px;font-weight:600}
+.pk-drop span{max-width:46ch;font-size:12.5px;line-height:1.5;color:var(--muted-foreground)}
+.pk-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:6px}
+.pk-res{display:grid;gap:12px;margin-top:14px}
+.pk-head{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.pk-head b{font-size:13.5px}
+.pk-size{margin-left:auto;font-size:11.5px;color:var(--subtle)}
+.pk-tree{display:grid;gap:3px;max-height:220px;overflow:auto;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);font-size:12px}
+.pk-tree li{display:flex;align-items:center;gap:8px;padding-left:calc(var(--d,0) * 16px);color:var(--muted-foreground)}
+.pk-tree li .ico{width:14px;height:14px;color:var(--subtle)}
+.pk-tree li.dir{color:var(--foreground)}
+.pk-tree li.key{color:var(--foreground)}.pk-tree li.key .ico{color:var(--acc)}
+.pk-tree li small{margin-left:auto;color:var(--subtle)}
+.pk-issues{display:grid;gap:6px}
+.pk-issues li{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;line-height:1.45}
+.pk-issues li .ico{margin-top:2px}
+.pk-issues li.err{border-color:var(--err-line);background:var(--err-soft);color:var(--err)}
+.pk-issues li.warn{border-color:var(--warn-line);background:var(--warn-soft);color:var(--warn)}
+.pk-issues li.ok{border-color:var(--ok-line);background:var(--ok-soft);color:var(--ok)}
+
+/* ---------- профиль: «Подключить телефон» ---------- */
+#pfPhoneCard>.btn-pri{justify-self:start}
+.pf-tmeta{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%}
+.pf-ph-done{display:flex;gap:8px;align-items:flex-start;margin:0;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--accent-bg);color:var(--muted-foreground);font-size:12.5px;line-height:1.5}
+.pf-ph-done .ico{margin-top:2px;color:var(--ok)}
+
+/* ---------- чип источника данных в статус-баре ---------- */
+.core-chip[data-s=sim] i{background:var(--acc)}
+
+/* ---------- OFFLINE-состояния матрицы ---------- */
+.sc[data-off="1"]{border-style:dashed}
+.sc .sc-val.off{color:var(--subtle)}
+
+/* ---------- телефон ---------- */
+@media (max-width:820px){
+  .hw-live{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .hw-actions .btn{flex:1 1 100%}.hw-baud{flex:1 1 100%}.hw-baud select{width:100%}
+  .hw-ws{flex-direction:column}
+  .hg-step{grid-template-columns:1fr;padding:14px}.hg-n{width:24px;height:24px}
+  .pk-drop{padding:20px 12px}
+}

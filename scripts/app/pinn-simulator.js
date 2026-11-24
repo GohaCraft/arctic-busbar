@@ -4,9 +4,15 @@
    Фильтр «PINN Kirchhoff Guard»: сравнивает ИК-температуру с физической оценкой при неизменном токе; нефизичный скачок помечается SPOOF FILTERED.
    Три испытания стенда: heat (нагрев стыка → авария → АВР на Ввод 2), spoof (помеха пурги), blackout (0 В → LTO → ДГУ) + reset.
    Работает только между входом и выходом из системы (abai:auth). Частота телеметрии — Store.get('tele') Гц; на экране значения плавно «скользят» (UI рисует спарклайны 60 FPS).
-   Плагины влияют на физику: PINN-KIRCHHOFF-GUARD, LWIR-BLIZZARD-FILTER, ATS-AUTO-TRANSFER, LTO-DGU-STARTER, IEC61850-RX-TAP; пользовательские JS-плагины исполняются каждый такт.
-   События (window): abai:sim (каждый такт, detail = state), abai:alarm {kind, active, ...}, abai:ats {to, auto, reason}, abai:scenario {name, phase},
-   abai:spoof {raw, filtered}, abai:dgu {state, auto}, abai:plugin-alarm {id, note}, abai:plugin-error {id, message}.
+
+   ЭТАП 3: ИСТОЧНИК ДАННЫХ.  S.source:  'sim'  — симулятор (только DEMO_MODE=true, пока нет живого оборудования);
+                                        'hw'   — настоящие пакеты HardwareLink (событие abai:hw → ingest): физика не выдумывает ничего,
+                                                 R_k и RUL считаются из измерений (R_k = ΔP / I², ΔP = (T − T_возд) / R_тепл), а чего датчик не прислал — не показывается;
+                                        'none' — боевой режим без оборудования: OFFLINE, данные «—», тревог нет, симуляции нет.
+   S.have = {T, Ta, I, U, S, acc, freq, vdc, soc, ltoT, Rk, F, rul, sw}: какие величины реально есть (UI рисует «—» там, где false).
+   Нет пакетов 5 с (abai:hw stale) → DEMO: возврат к симулятору, боевой режим: OFFLINE.  Пользовательские JS-плагины исполняет PluginHost (Web Worker), не этот файл.
+   События (window): abai:sim (каждый такт, detail = state), abai:source {source, prev}, abai:alarm {kind, active, ...}, abai:ats {to, auto, reason}, abai:scenario {name, phase},
+   abai:spoof {raw, filtered}, abai:dgu {state, auto}, abai:plugin-alarm {id, note}, abai:plugin-error {id, message}, abai:cmdfail {name}.
    API: window.PINN. Python-плагины здесь НЕ исполняются (Phase 2: сервер FastAPI). */
 (function (g) {
 'use strict';
@@ -14,12 +20,17 @@ const C = { U0: 110.2, I0: 780, T0: 42.4, TEND: 85, TAMB: -18, R0: 14.2, REND: 9
 C.K = C.R0 * Math.sqrt(C.F0);                                             // 79.7 µΩ·√kN
 C.FILM = C.REND / (C.K / Math.sqrt(C.FEND));                              // 4.129: при F = 12 кН и пленке 4.13 → R_k = 95 µΩ
 C.RULC = Math.log(C.RUL0 / C.RULEND) / (C.REND / C.R0 - 1);               // RUL(95 µΩ) = 15 мин
+C.RTH = (C.T0 - C.TAMB) / (C.I0 * C.I0 * C.R0 * 1e-6);                    // 6.99 К/Вт: тепловое сопротивление стыка стенда (для R_k = ΔP / I² по измерениям)
 const SQ3 = Math.sqrt(3), SPAN = 120;                                     // хранение истории, с
 const rnd = Math.random, gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) * 1.732;
 const smooth = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const lerpk = (cur, tgt, dt, tau) => cur + (tgt - cur) * (1 - Math.exp(-dt / tau));
 const emit = (n, d) => g.dispatchEvent(new CustomEvent(n, { detail: d }));
 const ST = () => g.Store, plugOn = id => !!(ST() && ST().plugins.enabled(id)), plugP = id => { const p = ST() && ST().plugins.get(id); return (p && p.params) || {}; };
+const DEMO = () => !!(g.ABAI_CONFIG && g.ABAI_CONFIG.DEMO_MODE === true);
+const HWL = () => g.HardwareLink || null, PH = () => g.PluginHost || null;
+const HAVE_KEYS = ['T', 'Ta', 'I', 'U', 'S', 'acc', 'freq', 'vdc', 'soc', 'ltoT', 'Rk', 'F', 'rul'];
+const allHave = v => { const o = { sw: false }; HAVE_KEYS.forEach(k => { o[k] = v; }); return o; };
 
 /* ---------- топология для графа ---------- */
 const TOPO = {
@@ -45,12 +56,12 @@ const S = {};
 const series = {};                                                        // имя → {t:[мс], v:[], r:[сырое]}
 let packets = [], timer = 0, last = 0, wanderP = [rnd() * 6.28, rnd() * 6.28, rnd() * 6.28, rnd() * 6.28];
 let sp = { next: 0, until: 0, off: 0, first: true };
-let pluginCache = {}, pluginErr = {}, pluginAlarm = {};
-let sinceBlackout = 0;
+let pluginErr = {}, pluginAlarm = {};
+let sinceBlackout = 0, hw = { last: 0, lastEmit: 0, est: null, lastT: null, lastI: null, rk: null }, hbAt = 0;
 
 function fresh() {
   Object.assign(S, {
-    running: false, ts: Date.now(), scenario: 'none', scenT: 0, h: 0, hT: 0,
+    running: false, source: 'none', have: allHave(false), live: false, Ta: C.TAMB, ts: Date.now(), scenario: 'none', scenT: 0, h: 0, hT: 0,
     U: C.U0, I: C.I0, S: SQ3 * C.U0 * C.I0 / 1000, mU: C.U0, mI: C.I0, mS: SQ3 * C.U0 * C.I0 / 1000, Tt: C.T0, Traw: C.T0, T: C.T0, Rk: C.R0, F: C.F0, P: C.I0 * C.I0 * C.R0 * 1e-6, rul: C.RUL0,
     freq: C.FREQ0, acc: C.ACC0, vdc: 220.4, soc: C.SOC0, ltoT: C.LTOT,
     in1: 'closed', in2: 'closed', ats: 'open', dgu: 'standby', src: 'IN1',
@@ -60,30 +71,26 @@ function fresh() {
   Object.keys(series).forEach(k => delete series[k]);
   ['temp', 'cur', 'acc', 'vdc', 'rk', 'volt'].forEach(k => { series[k] = { t: [], v: [], r: [] }; });
   packets = []; sp = { next: 0, until: 0, off: 0, first: true }; pluginAlarm = {}; sinceBlackout = 0;
+  hw = { last: 0, lastEmit: 0, est: null, lastT: null, lastI: null, rk: null };
 }
 const wander = (t, a, b, i) => Math.sin(t / 37.3 + wanderP[i]) * a + Math.sin(t / 11.1 + wanderP[(i + 1) % 4]) * b;
 const jointI = () => (S.in1 === 'closed' && S.U > 5 ? S.I : 0);
 const rulOf = rk => C.RUL0 * Math.exp(-C.RULC * (rk / C.R0 - 1));
 
-/* ---------- пользовательские JS-плагины (демо-режим: НЕ песочница безопасности) ---------- */
-function runPlugins(pk) {
-  const list = ST().plugins.list();
-  list.forEach(p => {
-    if (p.builtin || !p.on || p.lang !== 'js') return;
-    const key = p.id + '#' + (p.code || '').length + (p.code || '').slice(0, 24);
-    let fn = pluginCache[p.id] && pluginCache[p.id].key === key ? pluginCache[p.id].fn : null;
-    if (!fn) {
-      try { fn = new Function('plugin', 'window', 'document', 'localStorage', 'sessionStorage', 'fetch', 'XMLHttpRequest', 'Store', 'UsersDB', '"use strict";\n' + p.code); pluginCache[p.id] = { key, fn }; delete pluginErr[p.id]; }
-      catch (e) { if (pluginErr[p.id] !== e.message) { pluginErr[p.id] = e.message; emit('abai:plugin-error', { id: p.id, message: e.message }); } return; }
-    }
-    try {
-      const r = fn({ packet: pk, params: p.params || {}, state: { src: S.src, ats: S.ats, scenario: S.scenario } });
-      const on = !!(r && r.alarm);
-      if (on && !pluginAlarm[p.id]) emit('abai:plugin-alarm', { id: p.id, note: (r && r.note) || '' });
-      pluginAlarm[p.id] = on; delete pluginErr[p.id];
-    } catch (e) { if (pluginErr[p.id] !== e.message) { pluginErr[p.id] = e.message; emit('abai:plugin-error', { id: p.id, message: e.message }); } }
-  });
+/* ---------- пользовательские JS-плагины: исполняет PluginHost (Web Worker); здесь только вызов и разбор ответов ---------- */
+function runPlugins(pk) { const H = PH(); if (H) H.tick({ packet: pk, state: { src: S.src, ats: S.ats, scenario: S.scenario } }); }
+function onPluginResult(r) {
+  if (!S.running || !r) return;
+  if (r.ok) {
+    const on = !!r.alarm;
+    if (on && !pluginAlarm[r.id]) emit('abai:plugin-alarm', { id: r.id, note: r.note || '' });
+    pluginAlarm[r.id] = on; delete pluginErr[r.id];
+  } else {
+    const m = r.message || 'ERROR';
+    if (pluginErr[r.id] !== m) { pluginErr[r.id] = m; emit('abai:plugin-error', { id: r.id, message: m, disabled: !!r.disabled }); }
+  }
 }
+const syncPlugins = () => { const H = PH(); if (H && ST()) H.sync(ST().plugins.list()); };
 
 /* ---------- один такт физики ---------- */
 function step(dt, at, quiet) {
@@ -104,7 +111,7 @@ function step(dt, at, quiet) {
   S.U = Math.max(0, lerpk(S.U, Ut, dt, Ut < S.U ? 0.35 : 1.4) + gauss() * 0.012);
   S.I = Math.max(0, lerpk(S.I, It, dt, 0.3) + gauss() * 0.9);
   if (blackout && S.U < 0.3) { S.U = 0; S.I = Math.min(S.I, 0.4) * 0; }
-  S.S = SQ3 * S.U * S.I / 1000;
+  S.S = SQ3 * S.U * S.I / 1000; S.live = S.U > 5;
   S.link.ina = plugOn('IEC61850-RX-TAP');                                      // без шлюза МЭК 61850 измерения INA219 «замирают» (LINK LOST)
   if (S.link.ina) { S.mU = S.U; S.mI = S.I; S.mS = S.S; }
   /* стык: Хольм + тепловая инерция */
@@ -175,27 +182,39 @@ function step(dt, at, quiet) {
   };
   S.ts = now;
 
-  /* история для спарклайнов */
-  const push = (k, v, raw) => { const s = series[k]; s.t.push(now); s.v.push(v); s.r.push(raw == null ? v : raw); const cut = now - SPAN * 1000; while (s.t.length && s.t[0] < cut) { s.t.shift(); s.v.shift(); s.r.shift(); } };
-  push('temp', S.T, S.Traw); push('cur', S.mI); push('acc', S.acc); push('vdc', S.vdc); push('rk', S.Rk); push('volt', S.mU);
-  const pk = { t: now, U: +S.mU.toFixed(2), I: +S.mI.toFixed(1), T: +S.T.toFixed(2), Traw: +S.Traw.toFixed(2), Rk: +S.Rk.toFixed(2), F: +S.F.toFixed(2), f: +S.freq.toFixed(2), a: +S.acc.toFixed(3), Vdc: +S.vdc.toFixed(2), src: S.src, ats: S.ats, guard: S.guard.active };
+  publish(now, quiet);
+}
+
+/* история для спарклайнов, последние 5 пакетов, плагины, событие abai:sim. В режиме hw в историю идут только реально пришедшие величины. */
+function publish(now, quiet) {
+  const H = S.have, push = (k, v, raw) => { const s = series[k]; s.t.push(now); s.v.push(v); s.r.push(raw == null ? v : raw); const cut = now - SPAN * 1000; while (s.t.length && s.t[0] < cut) { s.t.shift(); s.v.shift(); s.r.shift(); } };
+  if (H.T) push('temp', S.T, S.Traw); if (H.I) push('cur', S.mI); if (H.acc) push('acc', S.acc); if (H.vdc) push('vdc', S.vdc); if (H.Rk) push('rk', S.Rk); if (H.U) push('volt', S.mU);
+  const n = (v, d) => +v.toFixed(d);
+  const pk = { t: now, U: H.U ? n(S.mU, 2) : null, I: H.I ? n(S.mI, 1) : null, T: H.T ? n(S.T, 2) : null, Traw: H.T ? n(S.Traw, 2) : null, Rk: H.Rk ? n(S.Rk, 2) : null, F: H.F ? n(S.F, 2) : null, f: H.freq ? n(S.freq, 2) : null, a: H.acc ? n(S.acc, 3) : null, Vdc: H.vdc ? n(S.vdc, 2) : null, src: S.src, ats: S.ats, guard: S.guard.active };
   packets.push(pk); if (packets.length > 5) packets.shift();
   if (quiet) return;
-  runPlugins({ temp: S.T, cur: S.mI, volt: S.mU, vib: S.acc, vdc: S.vdc });
+  runPlugins({ temp: H.T ? S.T : null, cur: H.I ? S.mI : null, volt: H.U ? S.mU : null, vib: H.acc ? S.acc : null, vdc: H.vdc ? S.vdc : null });
   emit('abai:sim', S);
 }
 
 function raiseAlarm(kind) { S.alarm = { active: true, kind, since: Date.now(), acked: false }; emit('abai:alarm', { kind, active: true, T: S.T, rul: S.rul }); }
 function clearAlarm() { const k = S.alarm.kind; S.alarm = { active: false, kind: '', since: 0, acked: false }; emit('abai:alarm', { kind: k, active: false }); }
 function ack() { if (!S.alarm.active || S.alarm.acked) return false; S.alarm.acked = true; emit('abai:alarm', { kind: S.alarm.kind, active: true, acked: true }); return true; }
+
+/* команда в сторону оборудования (режим hw): коммутации и ДГУ уходят в ESP32 / шлюз; сбой отправки — событие abai:cmdfail */
+const HW_CMD = { transfer: { cmd: 'ats', to: 2 }, 'return': { cmd: 'ats', to: 1 }, 'dgu.start': { cmd: 'dgu', on: 1 }, 'dgu.stop': { cmd: 'dgu', on: 0 } };
+function hwCmd(name) {
+  if (S.source !== 'hw' || !HWL() || !HW_CMD[name]) return;
+  HWL().send(HW_CMD[name]).then(ok => { if (!ok) emit('abai:cmdfail', { name }); }, () => emit('abai:cmdfail', { name }));
+}
 function transfer(auto, reason) {
   if (S.in1 !== 'closed' || S.ats !== 'open') return false;
-  S.in1 = 'open'; S.ats = 'closed'; S.src = 'IN2'; S.cmdUntil = Date.now() + 3500; emit('abai:ats', { to: 'IN2', auto: !!auto, reason: reason || 'manual' }); return true;
+  S.in1 = 'open'; S.ats = 'closed'; S.src = 'IN2'; S.cmdUntil = Date.now() + 3500; emit('abai:ats', { to: 'IN2', auto: !!auto, reason: reason || 'manual' }); hwCmd('transfer'); return true;
 }
 function endScenario() { const n = S.scenario; S.scenario = 'none'; S.scenT = 0; S.hT = 0; emit('abai:scenario', { name: n, phase: 'end' }); }
 function ret() {
   if (S.in1 === 'closed' && S.ats === 'open') return false;
-  S.in1 = 'closed'; S.ats = 'open'; S.src = 'IN1'; emit('abai:ats', { to: 'IN1', auto: false, reason: 'manual' }); return true;
+  S.in1 = 'closed'; S.ats = 'open'; S.src = 'IN1'; emit('abai:ats', { to: 'IN1', auto: false, reason: 'manual' }); hwCmd('return'); return true;
 }
 
 /* ---------- публичное управление ---------- */
@@ -209,7 +228,7 @@ function reset(silent) {
   else { S.Tt = S.T = S.Traw = C.T0; S.guard.est = C.T0; }                  // явный «Сброс стенда»: тепловое состояние сразу штатное (без долгого остывания)
 }
 function scenario(name) {
-  if (!S.running) return false;
+  if (!S.running || S.source !== 'sim') return false;                          // испытания стенда существуют только у симулятора (DEMO_MODE)
   if (name === 'reset') { reset(false); return true; }
   if (['heat', 'spoof', 'blackout'].indexOf(name) < 0) return false;
   reset(true); S.scenario = name; S.scenT = 0; S.spoofSeen = false; sp = { next: Date.now() + 900, until: 0, off: 0, first: true };
@@ -217,24 +236,135 @@ function scenario(name) {
 }
 function act(name) {
   if (!S.running) return { ok: false, reason: 'OFF' };
+  if (S.source === 'none') return { ok: false, reason: 'OFFLINE' };            // без связи с оборудованием команд нет
   if (name === 'transfer') return transfer(false, 'manual') ? { ok: true, to: 'IN2' } : { ok: false, reason: 'STATE' };
   if (name === 'return') return ret() ? { ok: true, to: 'IN1' } : { ok: false, reason: 'STATE' };
-  if (name === 'dgu.start') { if (S.dgu !== 'standby') return { ok: false, reason: 'STATE' }; S.dgu = 'starting'; emit('abai:dgu', { state: 'starting', auto: false }); setTimeout(() => { if (S.running && S.dgu === 'starting') { S.dgu = 'active'; emit('abai:dgu', { state: 'active', auto: false }); } }, 3000); return { ok: true }; }
-  if (name === 'dgu.stop') { if (S.dgu === 'standby') return { ok: false, reason: 'STATE' }; S.dgu = 'standby'; emit('abai:dgu', { state: 'standby', auto: false }); return { ok: true }; }
+  if (name === 'dgu.start') {
+    if (S.dgu !== 'standby') return { ok: false, reason: 'STATE' };
+    S.dgu = 'starting'; emit('abai:dgu', { state: 'starting', auto: false }); hwCmd('dgu.start');
+    setTimeout(() => { if (S.running && S.dgu === 'starting' && !S.have.sw) { S.dgu = 'active'; emit('abai:dgu', { state: 'active', auto: false }); } }, 3000);   // если оборудование присылает состояние ДГУ — ждём его
+    return { ok: true };
+  }
+  if (name === 'dgu.stop') { if (S.dgu === 'standby') return { ok: false, reason: 'STATE' }; S.dgu = 'standby'; emit('abai:dgu', { state: 'standby', auto: false }); hwCmd('dgu.stop'); return { ok: true }; }
   return { ok: false, reason: 'NAME' };
 }
-function loop() { const now = Date.now(); let dt = (now - last) / 1000; last = now; if (dt <= 0) return; step(Math.min(dt, 0.6)); }
+
+/* ---------- источник данных ---------- */
+function setSource(src) {
+  if (S.source === src) return;
+  const prev = S.source; S.source = src; S.have = allHave(src === 'sim');
+  Object.keys(series).forEach(k => { series[k] = { t: [], v: [], r: [] }; }); packets = [];                 // историю разных источников не смешиваем
+  emit('abai:source', { source: src, prev });
+}
+function startSim(prev) {                                                     // новый прогон симулятора (с «прогретой» историей)
+  fresh(); S.running = true; S.source = 'sim'; S.have = allHave(true); last = Date.now();
+  const n = 260; for (let i = n; i > 0; i--) step(0.25, last - i * 250, true);
+  emit('abai:source', { source: 'sim', prev: prev || 'none' });
+}
+function toHw(now) {                                                          // первый живой пакет: симуляция и её тревоги отбрасываются
+  if (S.source === 'sim') reset(true);
+  S.in1 = 'closed'; S.ats = 'open'; S.dgu = 'standby'; S.src = 'IN1'; S.scenario = 'none';
+  hw = { last: now, lastEmit: 0, est: null, lastT: null, lastI: null, rk: null };
+  setSource('hw'); S.have.sw = false;
+}
+function lostHw() {
+  if (S.source !== 'hw' || !S.running) return;
+  if (DEMO()) { startSim('hw'); emit('abai:sim', S); return; }              // демо продолжается на симуляторе
+  setSource('none'); S.guard.active = false; S.guard.until = 0; S.spoofSeen = false; emit('abai:sim', S);
+}
+const isLive = () => (S.source === 'sim' ? S.U > 5 : S.source === 'hw' ? (S.have.U ? S.U > 5 : (S.have.I ? S.I > 5 : false)) : false);
+
+/* Один пакет от оборудования (HardwareLink.sample) → состояние. Вызывается из abai:hw; не чаще tele Гц обновляет экран. */
+function ingest(sm) {
+  if (!S.running || !sm || typeof sm !== 'object') return false;
+  const now = sm.ts || Date.now();
+  if (S.source !== 'hw') toHw(now);
+  const thr = ST().thr.all(), H = S.have, dt = Math.min(Math.max((now - hw.last) / 1000, 0.01), 2); hw.last = now;
+  if (sm.Ta !== undefined) { S.Ta = sm.Ta; H.Ta = true; }
+  if (sm.I !== undefined) { S.I = S.mI = sm.I; H.I = true; }
+  if (sm.U !== undefined) { S.U = S.mU = sm.U; H.U = true; }
+  if (sm.acc !== undefined) { S.acc = sm.acc; H.acc = true; }
+  if (sm.vdc !== undefined) { S.vdc = sm.vdc; H.vdc = true; }
+  if (sm.soc !== undefined) { S.soc = sm.soc; H.soc = true; }
+  H.S = H.U && H.I; S.S = S.mS = H.S ? SQ3 * S.U * S.I / 1000 : 0;
+  if (sm.ats === 1 || sm.ats === 2) { S.in1 = sm.ats === 1 ? 'closed' : 'open'; S.ats = sm.ats === 2 ? 'closed' : 'open'; H.sw = true; }
+  if (typeof sm.in1 === 'boolean') { S.in1 = sm.in1 ? 'closed' : 'open'; H.sw = true; }
+  if (typeof sm.dgu === 'boolean') { S.dgu = sm.dgu ? 'active' : 'standby'; H.sw = true; }
+  S.live = isLive(); S.link.ina = H.I;
+  /* температура + фильтр Кирхгофа: одиночный скачок ИК при неизменном токе нефизичен → держим оценку hold_s секунд */
+  if (sm.T !== undefined) {
+    const raw = sm.T, gOn = plugOn('PINN-KIRCHHOFF-GUARD'), gp = plugP('PINN-KIRCHHOFF-GUARD'), hold = (+gp.hold_s || 6) * 1000, tol = 6;
+    H.T = true; S.Traw = raw; if (hw.est === null) hw.est = raw;
+    const steady = !H.I || hw.lastI === null || Math.abs(S.I - hw.lastI) <= 0.1 * Math.max(S.I, 50);
+    const jump = hw.lastT !== null && Math.abs(raw - hw.lastT) > tol && Math.abs(raw - hw.est) > tol;
+    if (gOn && steady && jump) {
+      S.guard.until = now + hold; S.guard.raw = Math.max(S.guard.raw, raw);
+      if (!S.spoofSeen) { S.spoofSeen = true; emit('abai:spoof', { raw, filtered: hw.est }); }
+    }
+    hw.lastT = raw; hw.lastI = H.I ? S.I : null;
+    S.guard.active = gOn && now < S.guard.until; if (!S.guard.active) { S.guard.raw = 0; if (now - S.guard.until > 30000) S.spoofSeen = false; hw.est = lerpk(hw.est, raw, dt, 1.5); }
+    S.guard.est = hw.est; S.Tt = hw.est; S.T = S.guard.active ? hw.est : raw;
+  }
+  /* R_k и RUL — из измерений: ΔP = (T − T_возд) / R_тепл,  R_k = ΔP / I² */
+  H.Rk = H.rul = false;
+  if (H.T && H.I && S.I >= 150) {
+    const rk = Math.max(0, (S.T - (H.Ta ? S.Ta : C.TAMB)) / C.RTH) / (S.I * S.I) * 1e6;
+    hw.rk = hw.rk === null ? rk : lerpk(hw.rk, rk, dt, 20); S.Rk = hw.rk; S.rul = rulOf(S.Rk); S.P = S.I * S.I * S.Rk * 1e-6; H.Rk = H.rul = true;
+  }
+  /* тревоги и АВР — те же правила, что у симулятора, но только по реальным данным */
+  const energized = S.live, rulMin = +plugP('ATS-AUTO-TRANSFER').rul_min || C.RULEND;
+  const heat = H.T && (S.T >= thr.T_max || (energized && H.Rk && S.rul <= rulMin + 0.001));
+  if (S.alarm.active && S.alarm.acked && (S.alarm.kind === 'heat' || S.alarm.kind === 'false') && !heat && (!H.T || S.T < thr.T_max - 6)) clearAlarm();
+  if (!S.alarm.active && heat && energized) {
+    raiseAlarm('heat');                                                        // скачки ИК отсеял фильтр (S.T = оценка), значит устойчивое превышение — настоящее
+    if (plugOn('ATS-AUTO-TRANSFER') && S.in1 === 'closed' && S.ats === 'open') transfer(true, 'heat');
+  }
+  const blackout = H.U && S.U < 5, carrying = blackout;
+  if (blackout && !S.alarm.active) raiseAlarm('blackout');
+  if (!blackout && S.alarm.active && S.alarm.kind === 'blackout') clearAlarm();
+  S.src = blackout ? (S.dgu === 'active' ? 'DGU' : 'LTO') : (S.in1 === 'closed' ? 'IN1' : 'IN2');
+  S.vibState = !H.acc ? 'off' : S.acc >= thr.A_max ? 'err' : S.acc >= 0.75 * thr.A_max ? 'warn' : 'ok';
+  S.ltoState = carrying && S.dgu !== 'active' ? 'discharge' : S.dgu === 'active' ? 'charge' : 'standby';
+  const r = (v, lim) => (v >= lim ? 'err' : v >= 0.9 * lim ? 'warn' : 'ok');
+  S.status = {
+    'MLX90614-IR-01': !H.T ? 'off' : (S.alarm.active && (S.alarm.kind === 'heat' || S.alarm.kind === 'false') && S.T >= thr.T_max ? 'err' : (S.guard.active || (H.Rk && S.Rk > 40) || r(S.T, thr.T_max) === 'warn' ? 'warn' : 'ok')),
+    'INA219-CUR-01': !H.I ? 'off' : (blackout ? 'warn' : r(S.I, thr.I_max)),
+    'MPU6050-VIB-01': S.vibState,
+    'LTO-BAT-BUF': !H.vdc ? 'off' : (S.vdc < thr.U_min ? 'err' : (carrying || S.vdc < thr.U_min + 6 ? 'warn' : 'ok'))
+  };
+  S.ts = now;
+  const gap = 1000 / (ST().get('tele') || 4) - 8;
+  if (now - hw.lastEmit < gap) return true;                                    // экран обновляем с частотой tele, пакеты могут идти чаще
+  hw.lastEmit = now; publish(now, false); return true;
+}
+
+function loop() {
+  const now = Date.now(); let dt = (now - last) / 1000; last = now; if (dt <= 0) return;
+  if (S.source === 'sim') step(Math.min(dt, 0.6));
+  else if (S.source === 'none' && now - hbAt >= 1000) { hbAt = now; S.ts = now; emit('abai:sim', S); }     // OFFLINE: раз в секунду подтверждаем «нет данных»
+}
 function restartTimer() { clearInterval(timer); if (S.running) timer = setInterval(loop, Math.round(1000 / (ST().get('tele') || 4))); }
-function start() { if (S.running) return; fresh(); S.running = true; last = Date.now(); const n = 260; for (let i = n; i > 0; i--) step(0.25, last - i * 250, true); restartTimer(); }
-function stop() { clearInterval(timer); timer = 0; S.running = false; fresh(); }
+function start() {
+  if (S.running) return;
+  const live = !!(HWL() && HWL().isFresh && HWL().isFresh());
+  fresh(); S.running = true; last = Date.now(); syncPlugins();
+  if (live) { S.source = 'hw'; S.have = allHave(false); }
+  else if (DEMO()) startSim('none');
+  else { S.source = 'none'; S.have = allHave(false); }
+  emit('abai:source', { source: S.source, prev: 'none' });
+  restartTimer();
+}
+function stop() { clearInterval(timer); timer = 0; S.running = false; const H = PH(); if (H) H.stop(); pluginErr = {}; fresh(); }
 
 /* ---------- потоки энергии / данных по рёбрам графа (0…1, знак = направление a→b) ---------- */
 function flows() {
-  const live = S.U > 5, f = {}, via2 = live && S.in1 === 'open' && S.ats === 'closed', p1 = live && S.in1 === 'closed', dgu = S.dgu === 'active', blk = S.U < 5, ina = S.link.ina;
+  const f = {};
+  if (S.source === 'none') { TOPO.edges.forEach(e => { f[e.id] = 0; }); return f; }                     // OFFLINE: по линиям ничего не течёт
+  const live = isLive(), via2 = live && S.in1 === 'open' && S.ats === 'closed', p1 = live && S.in1 === 'closed', dgu = S.dgu === 'active', blk = S.have.U ? S.U < 5 : false, ina = S.link.ina;
   f.e_in1_joint = p1 ? 1 : 0; f.e_joint_bus1 = p1 ? 1 : 0;
   f.e_in2_bus2 = live ? (via2 ? 1 : 0.14) : 0; f.e_bus2_ats = via2 ? 1 : 0; f.e_ats_bus1 = via2 ? 1 : 0;
-  f.e_ir_joint = 0.4; f.e_cur_bus1 = ina ? 0.4 : 0; f.e_vib_bus1 = 0.35;
-  f.e_ir_core = 0.55; f.e_cur_core = ina ? 0.55 : 0; f.e_vib_core = 0.5;
+  f.e_ir_joint = S.have.T ? 0.4 : 0; f.e_cur_bus1 = ina ? 0.4 : 0; f.e_vib_bus1 = S.have.acc ? 0.35 : 0;
+  f.e_ir_core = S.have.T ? 0.55 : 0; f.e_cur_core = ina ? 0.55 : 0; f.e_vib_core = S.have.acc ? 0.5 : 0;
   f.e_core_ats = Date.now() < S.cmdUntil ? 1 : 0.05;
   f.e_lto_core = blk ? 1 : 0.12; f.e_lto_ats = blk ? 0.6 : 0; f.e_dgu_lto = dgu ? 1 : (S.dgu === 'starting' ? 0.4 : 0); f.e_dgu_bus1 = dgu ? 0.8 : 0;
   return f;
@@ -245,7 +375,14 @@ fresh();
 
 g.addEventListener('abai:auth', e => { if (e.detail && e.detail.type === 'login') start(); else if (e.detail && e.detail.type === 'logout') stop(); });
 g.addEventListener('abai:settings', e => { if (e.detail && e.detail.key === 'tele') restartTimer(); });
-g.addEventListener('abai:plugins', () => { pluginCache = {}; });
+g.addEventListener('abai:plugins', () => { if (S.running) syncPlugins(); });
+g.addEventListener('abai:hw', e => {
+  const d = e.detail || {}; if (!S.running) return;
+  if (d.type === 'sample') ingest(d.sample);
+  else if (d.type === 'stale') lostHw();
+  else if (d.type === 'state' && (d.state === 'idle' || d.state === 'error')) lostHw();
+});
+if (PH()) PH().onResult(onPluginResult);
 g.PINN = { C, TOPO, state: () => S, series: k => series[k] || { t: [], v: [], r: [] }, packets: () => packets.slice(), flows, alarmNode, pluginErrors: () => pluginErr,
-  start, stop, ack, reset: () => reset(false), scenario, act, transfer: () => act('transfer'), rulOf, wipe, isRunning: () => S.running };
+  start, stop, ack, reset: () => reset(false), scenario, act, transfer: () => act('transfer'), rulOf, wipe, isRunning: () => S.running, source: () => S.source, ingest, isLive };
 })(window);

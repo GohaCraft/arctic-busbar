@@ -122,7 +122,7 @@
   .chips::-webkit-scrollbar{display:none}.chip{flex:none}
   .gpanel{left:8px;top:8px;right:8px;width:auto}
   .gp-body{max-height:48vh}
-  #miniMap{width:84px;height:120px;right:8px;bottom:8px}
+  #miniMap{width:84px;height:120px;right:8px;bottom:calc(86px + env(safe-area-inset-bottom,0px))}          /* над нижним доком */
   @media (orientation:landscape){#miniMap{width:128px;height:88px}}
   .glegend{display:none}
   .au-bar{gap:8px}.au-bar .seg{width:100%;overflow-x:auto;scrollbar-width:none}.au-bar .seg::-webkit-scrollbar{display:none}.au-bar .seg>button{flex:1 1 auto;min-width:0;padding:0 8px;white-space:nowrap}

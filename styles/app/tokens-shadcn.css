@@ -86,8 +86,9 @@ html[data-theme="light"]{
 body{background:var(--background);color:var(--foreground);font:13px/1.45 var(--font-sans);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
 html[lang="zh"] body{line-height:1.55}
 ::selection{background:var(--acc-soft-2)}
-#app :is(button,input,select,textarea){font:inherit;color:inherit}
-#app button{cursor:pointer}
+/* :where() обнуляет специфичность #app: иначе color/font:inherit перебивали .btn, .btn-pri, .btn-err и другие классовые цвета кнопок */
+:where(#app) :is(button,input,select,textarea){font:inherit;color:inherit}
+:where(#app) button{cursor:pointer}
 #app :focus-visible{outline:2px solid var(--ring);outline-offset:2px}
 #app h1,#app h2,#app h3,#app h4,#app p,#app dl,#app dd,#app ul,#app ol{margin:0;padding:0}
 #app ul,#app ol{list-style:none}

@@ -2,8 +2,10 @@
    • Матрица датчиков: 4 живые карточки (значения плавно «скользят», спарклайн 60 FPS с градиентной заливкой и пунктирной уставкой, статусы, формулы PINN, «Калибровка уставки»).
    • Инспектор: выезжающий лист справа (клик по карточке датчика или узлу графа) — живые параметры, формулы, управление с проверкой RBAC.
    • Журнал аудита: фильтры период / сотрудник / тип, сортировка колонок, «Откатить (Rollback)», .CSV. Все события симулятора и действия пользователей пишутся в журнал.
-   • Плагины: переключатели, JSON-параметры ⚙, редактор собственного JS / Python-плагина.
-   • Верхняя панель: метрики, аварийная плашка, меню «Испытания стенда».
+   • Плагины: переключатели, JSON-параметры ⚙; окно «Добавить плагин» (папка / код) — plugin-ui.js; кнопки правки скрыты без CAN_MANAGE_PLUGINS.
+   • Верхняя панель: метрики, аварийная плашка, меню «Испытания стенда» (только DEMO_MODE).
+   ЭТАП 3: права читаются ТОЛЬКО из Store.session (иммутабельная сессия), не из localStorage и не из UsersDB; привилегированные вызовы UsersDB несут Bearer-токен сессии.
+   Состояние источника данных (PINN.state().source / have): 'none' → OFFLINE и «—», 'hw' → только реально пришедшие величины, 'sim' → демо.
    Зависимости (загружаются раньше): Store, UsersDB, I18N, PINN, AuthApp. Окна/тосты/переключение видов — AppShell (вызывается во время работы).
    API: window.ScadaUI = { init, setView, renderGrid, renderAudit, renderPlugins, inspect, closeInspector, inspectorTarget, openCalibration, openPluginEditor, auditFilter, evText, whoName, tok, can, stats } */
 (function (g) {
@@ -13,8 +15,8 @@ const T = (k, p) => g.I18N.t(k, p), ST = () => g.Store, PN = () => g.PINN, DB = 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), fx = (v, d) => (+v).toFixed(d == null ? 1 : d);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ico = (n, c) => '<svg class="ico' + (c ? ' ' + c : '') + '" aria-hidden="true"><use href="#i-' + n + '"/></svg>';
-const me = () => (g.AuthApp && g.AuthApp.user && g.AuthApp.user()) || null;
-const can = perm => { const u = me(); return !!(u && (DB().permsOf(u.id) || {})[perm]); };
+const me = () => ST().session.user;
+const can = perm => ST().session.has(perm);                                      // ЭТАП 3: право = подписанный токен в замороженной сессии (не localStorage, не UsersDB)
 const toast = (k, a, b) => { if (g.AppShell && g.AppShell.toast) g.AppShell.toast(k, a, b); };
 const setT = (el, s) => { if (el && el.textContent !== s) el.textContent = s; };
 const whoName = e => (e.role === 'jury' ? T('name.jury') : e.user);
@@ -22,22 +24,22 @@ const SRC_S = { IN1: 'ok', IN2: 'warn', LTO: 'err', DGU: 'err' };
 let view = 'grid', run = false, raf = 0, lastT = 0, frame = 0, draws = 0, simTick = 0;
 
 /* ======================= ДАТЧИКИ ======================= */
-const stT = st => T(st === 'err' ? 'sc.err' : st === 'warn' ? 'sc.warn' : 'sc.ok');
+const stT = st => T(st === 'err' ? 'sc.err' : st === 'warn' ? 'sc.warn' : st === 'off' ? 'sc.off' : 'sc.ok');
 const SENS = [
   { id: 'MLX90614-IR-01', tag: 'temp', thr: 'T_max', ser: 'temp', ms: 0.7, raw: true,
-    m: [['sc.l.temp', S => S.T, 1, '°C', S => (S.status['MLX90614-IR-01'] === 'err' ? 'hot' : '')], ['sc.l.rk', S => S.Rk, 1, 'µΩ', S => (S.Rk > 40 ? 'hot' : '')], ['sc.l.force', S => S.F, 1, 'kN']],
+    m: [['sc.l.temp', S => S.T, 1, '°C', S => (S.status['MLX90614-IR-01'] === 'err' ? 'hot' : ''), 'T'], ['sc.l.rk', S => S.Rk, 1, 'µΩ', S => (S.Rk > 40 ? 'hot' : ''), 'Rk'], ['sc.l.force', S => S.F, 1, 'kN', null, 'F']],
     fx: S => 'R_k = K/√F = ' + fx(S.Rk, 1) + ' µΩ',
     flag: S => (S.guard.active ? ['warn', 'Kirchhoff Guard · SPOOF FILTERED'] : S.alarm.active && S.alarm.kind !== 'blackout' ? ['err', T('sc.flag.alarm')] : S.status['MLX90614-IR-01'] === 'warn' ? ['warn', T('sc.flag.warn')] : null) },
   { id: 'INA219-CUR-01', tag: 'current', thr: 'I_max', ser: 'cur', ms: 10,
-    m: [['sc.l.cur', S => S.mI, 0, 'u.a'], ['sc.l.volt', S => S.mU, 1, 'u.kv'], ['sc.l.pow', S => S.mS, 1, 'MVA']],
+    m: [['sc.l.cur', S => S.mI, 0, 'u.a', null, 'I'], ['sc.l.volt', S => S.mU, 1, 'u.kv', null, 'U'], ['sc.l.pow', S => S.mS, 1, 'MVA', null, 'S']],
     fx: S => 'S = √3·U·I = ' + fx(S.mS, 1) + ' MVA',
-    flag: S => (!S.link.ina ? ['warn', 'LINK LOST'] : S.U < 5 ? ['warn', T('sc.flag.nov')] : S.status['INA219-CUR-01'] === 'err' ? ['err', T('sc.flag.over')] : null) },
+    flag: S => (!S.link.ina && S.source === 'sim' ? ['warn', 'LINK LOST'] : S.have.U && S.U < 5 ? ['warn', T('sc.flag.nov')] : S.status['INA219-CUR-01'] === 'err' ? ['err', T('sc.flag.over')] : null) },
   { id: 'MPU6050-VIB-01', tag: 'vib', thr: 'A_max', ser: 'acc', ms: 0.035,
-    m: [['sc.l.freq', S => S.freq, 1, 'Hz'], ['sc.l.acc', S => S.acc, 2, 'g'], ['sc.l.state', S => stT(S.vibState), 'txt', '', S => S.vibState]],
+    m: [['sc.l.freq', S => S.freq, 1, 'Hz', null, 'freq'], ['sc.l.acc', S => S.acc, 2, 'g', null, 'acc'], ['sc.l.state', S => stT(S.vibState), 'txt', '', S => S.vibState, 'acc']],
     fx: S => 'a_rms = √(Σa²/N) = ' + fx(S.acc, 2) + ' g',
     flag: S => (S.vibState !== 'ok' ? [S.vibState, T('sc.flag.vib')] : null) },
   { id: 'LTO-BAT-BUF', tag: 'power', thr: 'U_min', ser: 'vdc', ms: 0.7,
-    m: [['sc.l.vdc', S => S.vdc, 1, 'V DC'], ['sc.l.soc', S => S.soc, 0, '%'], ['sc.l.state', S => T('sc.lto.' + S.ltoState), 'txt', '', S => (S.ltoState === 'discharge' ? 'warn' : 'ok')]],
+    m: [['sc.l.vdc', S => S.vdc, 1, 'V DC', null, 'vdc'], ['sc.l.soc', S => S.soc, 0, '%', null, 'soc'], ['sc.l.state', S => T('sc.lto.' + S.ltoState), 'txt', '', S => (S.ltoState === 'discharge' ? 'warn' : 'ok'), 'vdc']],
     fx: S => 'U_dc = f(SoC) = ' + fx(S.vdc, 1) + ' V',
     flag: S => (S.ltoState === 'discharge' ? ['warn', T('sc.flag.dis')] : S.status['LTO-BAT-BUF'] === 'err' ? ['err', 'U < U_min'] : null) }
 ];
@@ -73,7 +75,7 @@ function fit(cv) {
 function I18N_apply(root) { g.I18N.apply(root); }
 function states(name) {
   const box = D.querySelector('.states[data-for="' + name + '"]'); if (!box) return;
-  if (!box.firstChild) box.innerHTML = '<div data-s="loading"><span class="spin"></span><span data-i18n="st.loading"></span></div><div data-s="empty"><b>∅</b><span data-i18n="st.empty"></span></div><div data-s="offline"><b>!</b><span data-i18n="st.offline"></span></div><div data-s="error"><b>×</b><span data-i18n="st.error"></span></div>';
+  if (!box.firstChild) box.innerHTML = '<div data-s="loading"><span class="spin"></span><span data-i18n="st.loading"></span></div><div data-s="empty"><b>∅</b><span data-i18n="st.empty"></span></div><div data-s="offline"><b>!</b><span data-i18n="st.offline"></span><button type="button" class="btn btn-sm" data-open="hardware"><svg class="ico"><use href="#i-chip"/></svg><span data-i18n="hw.connect"></span></button></div><div data-s="error"><b>×</b><span data-i18n="st.error"></span></div>';
   I18N_apply(box);
 }
 function applyGridFilter() {
@@ -82,23 +84,28 @@ function applyGridFilter() {
     const ok = (gridFilter.tag === 'all' || (gridFilter.tag === 'anomaly' ? c.st !== 'ok' : c.s.tag === gridFilter.tag)) && (!q || (c.s.id + ' ' + T('sd.' + c.s.id) + ' ' + T('tag.' + c.s.tag)).toLowerCase().indexOf(q) >= 0);
     c.el.hidden = !ok; if (ok) n++;
   });
-  const v = $('view-grid'); if (v) v.dataset.state = !PN().isRunning() ? 'offline' : n ? 'ok' : 'empty';
+  const v = $('view-grid'); if (v) v.dataset.state = !PN().isRunning() || PN().source() === 'none' ? 'offline' : n ? 'ok' : 'empty';
 }
 
-/* значения карточек: плавное скольжение к целевым (60 FPS), текст обновляется только при изменении */
+/* значения карточек: плавное скольжение к целевым (60 FPS), текст обновляется только при изменении; чего нет в данных — «—» */
 function updateCards(dt, force) {
-  const S = PN().state(), thr = ST().thr.all(), k = force ? 1 : 1 - Math.exp(-dt / 0.16), fxOn = !!ST().get('fx');
+  const S = PN().state(), thr = ST().thr.all(), k = force ? 1 : 1 - Math.exp(-dt / 0.16), fxOn = !!ST().get('fx'), none = S.source === 'none';
   cards.forEach(c => {
     c.s.m.forEach((m, i) => {
+      if (none || (m[5] && S.have[m[5]] === false)) {                                    // нет данных от оборудования
+        c.vals[i] = null; if (c.txt[i] !== '—') { c.txt[i] = '—'; c.v[i].textContent = '—'; }
+        c.val[i].className = 'sc-val' + (m[2] === 'txt' ? ' st' : '') + ' off'; c.val[i].dataset.c = ''; return;
+      }
       if (m[2] === 'txt') { const t = m[1](S); if (c.txt[i] !== t) { c.txt[i] = t; c.v[i].textContent = t; } const cl = m[4] ? m[4](S) : 'ok'; c.val[i].className = 'sc-val st ' + (cl === 'ok' ? '' : cl); return; }
+      if (c.txt[i] === '—') { c.txt[i] = null; c.val[i].classList.remove('off'); }
       const tg = +m[1](S); c.vals[i] = c.vals[i] == null ? tg : c.vals[i] + (tg - c.vals[i]) * k;
       setT(c.v[i], fx(c.vals[i], m[2])); const cl = m[4] ? m[4](S) : ''; if (c.val[i].dataset.c !== cl) { c.val[i].dataset.c = cl; c.val[i].classList.toggle('hot', cl === 'hot'); }
     });
-    const st = S.status[c.s.id] || 'ok'; if (c.st !== st) { c.st = st; c.el.dataset.st = st; if (gridFilter.tag === 'anomaly') applyGridFilter(); }
-    c.el.dataset.off = c.s.id === 'INA219-CUR-01' && !S.link.ina ? '1' : '0';
+    const st = none ? 'off' : (S.status[c.s.id] || 'ok'); if (c.st !== st) { c.st = st; c.el.dataset.st = st; if (gridFilter.tag === 'anomaly') applyGridFilter(); }
+    c.el.dataset.off = st === 'off' || (c.s.id === 'INA219-CUR-01' && !S.link.ina && S.source === 'sim') ? '1' : '0';
     const sp = THR_OF[c.s.id] ? thr[c.s.thr] : 0; setT(c.sp, c.s.thr + ' ' + ST().thr.fmt(c.s.thr, sp) + ' ' + ST().THR[c.s.thr].unit);
-    c.fx.hidden = !fxOn; if (fxOn) setT(c.fx, c.s.fx(S));
-    const f = c.s.flag(S), key = f ? f[0] + '|' + f[1] : ''; if (c.fl !== key) { c.fl = key; c.flag.classList.toggle('on', !!f); if (f) { c.flag.className = 'pill sc-flag on pill-' + f[0]; c.flag.textContent = f[1]; } }
+    c.fx.hidden = !fxOn || st === 'off'; if (fxOn && st !== 'off') setT(c.fx, c.s.fx(S));
+    const f = st === 'off' ? ['off', 'OFFLINE'] : c.s.flag(S), key = f ? f[0] + '|' + f[1] : ''; if (c.fl !== key) { c.fl = key; if (f) { c.flag.className = 'pill sc-flag on ' + (f[0] === 'off' ? 'off' : 'pill-' + f[0]); c.flag.textContent = f[1]; } else c.flag.className = 'pill sc-flag'; }   // без флага все модификаторы (в т.ч. off) снимаются
   });
 }
 
@@ -106,7 +113,9 @@ function updateCards(dt, force) {
 const WIN = 60000;
 function spark(cv, o) {
   const w = cv._w, h = cv._h; if (!w || !h) return;
-  const s = PN().series(o.ser), n = s.t.length; if (n < 2) return;
+  const s = PN().series(o.ser), n = s.t.length;
+  if (n < 2) { if (!cv._blank) { const x0 = cv.getContext('2d'); x0.setTransform(1, 0, 0, 1, 0, 0); x0.clearRect(0, 0, cv.width, cv.height); cv._blank = true; } return; }   // нет данных: лента пустая
+  cv._blank = false;
   const x = cv.getContext('2d'), d = cv._d, P = ST().palette(), now = Date.now(), t0 = now - WIN, S = PN().state();
   x.setTransform(d, 0, 0, d, 0, 0); x.clearRect(0, 0, w, h);
   let i0 = 0; while (i0 < n - 1 && s.t[i0 + 1] < t0) i0++;
@@ -150,30 +159,31 @@ function drawCards(dt) {
 
 /* ======================= ВЕРХНЯЯ ПАНЕЛЬ, ТРЕВОГИ ======================= */
 function onSim(S) {
-  const thr = ST().thr.all();
-  setT($('tU'), fx(S.mU, 1)); setT($('tI'), fx(S.mI, 0)); setT($('tT'), fx(S.T, 1)); setT($('tRul'), g.I18N.dur(S.rul)); setT($('mU'), fx(S.mU, 1)); setT($('mT'), fx(S.T, 1));
-  const hot = S.T >= thr.T_max * 0.9; $('tT').classList.toggle('hot', hot); const tp = $('mTp'); if (tp) tp.classList.toggle('hot', hot);
-  const sl = T('src.' + S.src), ss = SRC_S[S.src] || 'ok'; setT($('tSrc'), sl); setT($('mSrc'), sl); $('tSrcBox').dataset.s = ss; $('mSrc').dataset.s = ss;
-  const cs = $('coreStatus'); if (cs) cs.dataset.s = S.alarm.active ? 'err' : S.guard.active ? 'warn' : 'ok';
+  const thr = ST().thr.all(), H = S.have, off = S.source === 'none', num = (ok, v, d) => (ok ? fx(v, d) : '—');
+  setT($('tU'), num(H.U, S.mU, 1)); setT($('tI'), num(H.I, S.mI, 0)); setT($('tT'), num(H.T, S.T, 1)); setT($('tRul'), H.rul ? g.I18N.dur(S.rul) : '—'); setT($('mU'), num(H.U, S.mU, 1)); setT($('mT'), num(H.T, S.T, 1));
+  [['tU', H.U], ['tI', H.I], ['tT', H.T], ['tRul', H.rul]].forEach(a => $(a[0]).classList.toggle('off', !a[1]));
+  const hot = !!H.T && S.T >= thr.T_max * 0.9; $('tT').classList.toggle('hot', hot); const tp = $('mTp'); if (tp) tp.classList.toggle('hot', hot);
+  const sl = off ? '—' : T('src.' + S.src), ss = off ? 'off' : (SRC_S[S.src] || 'ok'); setT($('tSrc'), sl); setT($('mSrc'), sl); $('tSrcBox').dataset.s = ss; $('mSrc').dataset.s = ss;
+  const cs = $('coreStatus'); if (cs) cs.dataset.s = off ? 'off' : S.alarm.active ? 'err' : S.guard.active ? 'warn' : S.source === 'sim' ? 'sim' : 'ok';
   alarmUI(S); if ((++simTick & 3) === 0) { if (view === 'grid') applyGridFilter(); } updateInspector(S);
 }
 function alarmUI(S) {
   const A = S.alarm, el = $('alarm'); if (!el) return; const show = A.active && !A.acked;
   if (!show) { if (!el.hidden) el.hidden = true; return; }
   const k = A.kind; el.dataset.k = k === 'false' ? 'warn' : 'err';
-  setT($('alarmTitle'), T('al.' + k + '.t')); setT($('alarmMsg'), T('al.' + k + '.m', { t: fx(S.T, 1), rul: g.I18N.dur(S.rul), src: T('src.' + S.src), soc: Math.round(S.soc) }));
+  setT($('alarmTitle'), T('al.' + k + '.t')); setT($('alarmMsg'), T('al.' + k + '.m', { t: fx(S.T, 1), rul: g.I18N.dur(S.rul), src: T('src.' + S.src), soc: S.have.soc ? Math.round(S.soc) : '—' }));
   if (el.hidden) el.hidden = false;
 }
 
 /* ======================= ИНСПЕКТОР ======================= */
 let insp = null;                                                               // {kind:'sensor'|'node', id, rows:[], o}
 const NODE = {
-  in1: { t: 'node.in1', d: 'nd.in1', kv: [['kv.volt', S => fx(S.mU, 1) + ' ' + T('u.kv')], ['kv.state', S => (S.in1 === 'closed' ? (S.U > 5 ? T('sd.load') : T('sd.off')) : T('sd.open')), S => (S.in1 === 'closed' && S.U > 5 ? 'ok' : 'warn')], ['kv.cur', S => fx(S.mI, 0) + ' ' + T('u.a')]], acts: [] },
-  in2: { t: 'node.in2', d: 'nd.in2', kv: [['kv.volt', S => fx(S.U, 1) + ' ' + T('u.kv')], ['kv.state', S => (S.U > 5 ? (S.in1 === 'open' ? T('sd.load') : T('sd.standby')) : T('sd.off')), S => (S.in1 === 'open' ? 'warn' : 'ok')]], acts: [] },
+  in1: { t: 'node.in1', d: 'nd.in1', kv: [['kv.volt', S => fx(S.mU, 1) + ' ' + T('u.kv')], ['kv.state', S => (S.in1 === 'closed' ? (PN().isLive() ? T('sd.load') : T('sd.off')) : T('sd.open')), S => (S.in1 === 'closed' && PN().isLive() ? 'ok' : 'warn')], ['kv.cur', S => fx(S.mI, 0) + ' ' + T('u.a')]], acts: [] },
+  in2: { t: 'node.in2', d: 'nd.in2', kv: [['kv.volt', S => fx(S.U, 1) + ' ' + T('u.kv')], ['kv.state', S => (PN().isLive() ? (S.in1 === 'open' ? T('sd.load') : T('sd.standby')) : T('sd.off')), S => (S.in1 === 'open' ? 'warn' : 'ok')]], acts: [] },
   ats: { t: 'node.ats', d: 'nd.ats', kv: [['kv.pos', S => (S.ats === 'closed' ? T('sd.closed') : T('sd.open')), S => (S.ats === 'closed' ? 'warn' : 'ok')], ['kv.src', S => T('src.' + S.src)], ['kv.rulmin', S => '≤ ' + ((ST().plugins.get('ATS-AUTO-TRANSFER') || { params: {} }).params.rul_min || 15) + ' ' + T('u.min')]],
     fx: ['RUL ≤ RUL_min → ATS', 'ΣI = 0'], acts: [['transfer', 'in.transfer', 'CAN_SWITCH_RELAY', S => S.ats === 'open' && S.in1 === 'closed'], ['return', 'in.return', 'CAN_SWITCH_RELAY', S => S.ats === 'closed' || S.in1 === 'open']] },
   bus1: { t: 'node.bus1', d: 'nd.bus', kv: [['kv.volt', S => fx(S.mU, 1) + ' ' + T('u.kv')], ['kv.cur', S => fx(S.mI, 0) + ' ' + T('u.a')], ['kv.pow', S => fx(S.mS, 1) + ' MVA']], fx: ['S = √3·U·I'], acts: [] },
-  bus2: { t: 'node.bus2', d: 'nd.bus', kv: [['kv.volt', S => fx(S.U, 1) + ' ' + T('u.kv')], ['kv.state', S => (S.U > 5 ? T('sd.standby') : T('sd.off'))]], acts: [] },
+  bus2: { t: 'node.bus2', d: 'nd.bus', kv: [['kv.volt', S => fx(S.U, 1) + ' ' + T('u.kv')], ['kv.state', S => (PN().isLive() ? T('sd.standby') : T('sd.off'))]], acts: [] },
   joint: { t: 'node.joint', d: 'nd.joint', sensor: 'MLX90614-IR-01', kv: [['kv.t', S => fx(S.T, 1) + ' °C', S => S.status['MLX90614-IR-01']], ['kv.rk', S => fx(S.Rk, 1) + ' µΩ', S => (S.Rk > 40 ? 'err' : '')], ['kv.f', S => fx(S.F, 1) + ' kN'], ['kv.p', S => fx(S.P, 1) + ' ' + T('u.w')], ['kv.rul', S => g.I18N.dur(S.rul), S => (S.rul < 60 ? 'err' : S.rul < 600 ? 'warn' : '')]],
     fx: ['R_k = K / √F · film', 'ΔP = I² · R_k', 'RUL = RUL₀ · exp(−c · (R_k/R₀ − 1))', 'T → T_ss = T_amb + ΔT·(I/I₀)²'], acts: [['calib:T_max', 'cb.btn', 'CAN_EDIT_PINN']] },
   s_ir: { sensor: 'MLX90614-IR-01' }, s_cur: { sensor: 'INA219-CUR-01' }, s_vib: { sensor: 'MPU6050-VIB-01' }, lto: { sensor: 'LTO-BAT-BUF', extra: true },
@@ -181,6 +191,9 @@ const NODE = {
     fx: ['|T_ir − T_phys| > 6 °C ∧ ΔI = 0 → SPOOF', 'ΣI_in = ΣI_out'], acts: [['ack', 'al.ack', 'CAN_SWITCH_RELAY', S => S.alarm.active && !S.alarm.acked]] },
   dgu: { t: 'node.dgu', d: 'nd.dgu', kv: [['kv.state', S => T('sd.' + S.dgu), S => (S.dgu === 'active' ? 'warn' : '')], ['kv.soc', S => Math.round(S.soc) + ' %']], acts: [['dgu.start', 'in.dgustart', 'CAN_SWITCH_RELAY', S => S.dgu === 'standby'], ['dgu.stop', 'in.dgustop', 'CAN_SWITCH_RELAY', S => S.dgu !== 'standby']] }
 };
+const HAVE_OF = { 'kv.volt': 'U', 'kv.cur': 'I', 'kv.pow': 'S', 'kv.t': 'T', 'kv.rk': 'Rk', 'kv.f': 'F', 'kv.p': 'Rk', 'kv.rul': 'rul', 'kv.soc': 'soc', 'kv.traw': 'T', 'kv.test': 'T',
+  'sc.l.temp': 'T', 'sc.l.rk': 'Rk', 'sc.l.force': 'F', 'sc.l.cur': 'I', 'sc.l.volt': 'U', 'sc.l.pow': 'S', 'sc.l.freq': 'freq', 'sc.l.acc': 'acc', 'sc.l.vdc': 'vdc', 'sc.l.soc': 'soc' };
+const KEEP_OFFLINE = { 'kv.plug': 1, 'kv.setp': 1, 'kv.rulmin': 1 };
 function sensRows(sid) {
   const s = SBY[sid];
   return { t: sid, d: 'sd.' + sid, sensor: sid, kv: s.m.map(m => [m[0], S => (m[2] === 'txt' ? m[1](S) : fx(m[1](S), m[2]) + ' ' + (/^u\./.test(m[3]) ? T(m[3]) : m[3])), S => (m[2] === 'txt' ? (m[4] ? m[4](S) : '') : '')]).concat([['kv.setp', () => s.thr + ' = ' + ST().thr.fmt(s.thr, ST().thr.get(s.thr)) + ' ' + ST().THR[s.thr].unit]]),
@@ -220,11 +233,15 @@ function renderActs() {
 }
 function updateInspector(S, force) {
   if (!insp) return; const d = insp.def;
-  d.kv.forEach((r, i) => { const b = insp.rows[i]; if (!b) return; setT(b, r[1](S)); const c = r[2] ? r[2](S) : ''; if (b.dataset.c !== c) { b.dataset.c = c; b.className = c || ''; } });
+  d.kv.forEach((r, i) => {
+    const b = insp.rows[i]; if (!b) return;
+    if (!KEEP_OFFLINE[r[0]] && (S.source === 'none' || (HAVE_OF[r[0]] && S.have[HAVE_OF[r[0]]] === false))) { setT(b, '—'); if (b.dataset.c !== 'off') { b.dataset.c = 'off'; b.className = 'off'; } return; }
+    setT(b, r[1](S)); const c = r[2] ? r[2](S) : ''; if (b.dataset.c !== c) { b.dataset.c = c; b.className = c || ''; }
+  });
   const pills = $('inPills'); if (pills) {
-    const st = insp.sid ? (S.status[insp.sid] || 'ok') : (insp.t.id === 'joint' ? (S.status['MLX90614-IR-01'] || 'ok') : insp.t.id === 'core' ? (S.guard.active ? 'warn' : 'ok') : 'ok');
+    const st = S.source === 'none' ? 'off' : insp.sid ? (S.status[insp.sid] || 'ok') : (insp.t.id === 'joint' ? (S.status['MLX90614-IR-01'] || 'ok') : insp.t.id === 'core' ? (S.guard.active ? 'warn' : 'ok') : 'ok');
     const key = st + (insp.sid ? '|' + SBY[insp.sid].tag : '');
-    if (pills.dataset.k !== key + g.I18N.get()) { pills.dataset.k = key + g.I18N.get(); pills.innerHTML = '<span class="pill pill-' + (st === 'ok' ? 'ok' : st) + '">' + esc(stT(st)) + '</span>' + (insp.sid ? '<span class="pill">' + esc(T('tag.' + SBY[insp.sid].tag)) + '</span>' : ''); }
+    if (pills.dataset.k !== key + g.I18N.get()) { pills.dataset.k = key + g.I18N.get(); pills.innerHTML = '<span class="pill' + (st === 'off' ? '' : ' pill-' + st) + '">' + esc(stT(st)) + '</span>' + (insp.sid ? '<span class="pill">' + esc(T('tag.' + SBY[insp.sid].tag)) + '</span>' : ''); }
   }
   if (force || (simTick & 7) === 0) renderActs();
 }
@@ -237,7 +254,7 @@ function inspAction(a) {
   if (a.indexOf('calib:') === 0) return openCalibration(a.slice(6));
   const need = { transfer: 'CAN_SWITCH_RELAY', return: 'CAN_SWITCH_RELAY', 'dgu.start': 'CAN_SWITCH_RELAY', 'dgu.stop': 'CAN_SWITCH_RELAY', ack: 'CAN_SWITCH_RELAY' }[a];
   if (need && !can(need)) return toast('err', T('perm.t'), T('perm.denied', { perm: need }));
-  if (a === 'ack') { ackAlarm(); } else { const r = PN().act(a); if (!r.ok) toast('warn', T('act.fail'), T('act.state')); else if (a === 'dgu.start' || a === 'dgu.stop') { /* журнал пишет мост событий */ } }
+  if (a === 'ack') { ackAlarm(); } else { const r = PN().act(a); if (!r.ok) toast('warn', T('act.fail'), T(r.reason === 'OFFLINE' ? 'act.offline' : 'act.state')); else if (a === 'dgu.start' || a === 'dgu.stop') { /* журнал пишет мост событий */ } }
   renderActs(); updateInspector(S, true);
 }
 function ackAlarm() {
@@ -320,53 +337,27 @@ function rollback(id) {
 function registerUndo() {
   const A = ST().audit;
   A.registerUndo('setpoint', d => { const th = ST().THR[d.key], old = ST().thr.get(d.key), r = ST().thr.set(d.key, d.value); return r.ok ? { node: th.sensor, old: ST().thr.fmt(d.key, old) + ' ' + th.unit, nw: ST().thr.fmt(d.key, d.value) + ' ' + th.unit } : null; });
-  A.registerUndo('rbac', d => { const o = (DB().permsOf(d.userId) || {})[d.perm], r = DB().setPerm(d.userId, d.perm, d.value); return r.ok ? { node: d.perm + ' · ' + d.userId, old: o ? 'ON' : 'OFF', nw: d.value ? 'ON' : 'OFF' } : null; });
+  A.registerUndo('rbac', d => { const o = (DB().permsOf(d.userId) || {})[d.perm], r = DB().setPerm(d.userId, d.perm, d.value, ST().session.bearer()); return r.ok ? { node: d.perm + ' · ' + d.userId, old: o ? 'ON' : 'OFF', nw: d.value ? 'ON' : 'OFF' } : null; });
   A.registerUndo('plugin', d => { const p = ST().plugins.get(d.id), o = p && p.on, r = ST().plugins.setOn(d.id, d.on); return r ? { node: d.id, old: o ? 'ON' : 'OFF', nw: d.on ? 'ON' : 'OFF' } : null; });
   A.registerUndo('pluginParams', d => { const p = ST().plugins.get(d.id), o = p && JSON.stringify(p.params), r = ST().plugins.setParams(d.id, d.params); return r ? { node: d.id, old: o, nw: JSON.stringify(d.params) } : null; });
 }
 
 /* ======================= ПЛАГИНЫ ======================= */
 function plugRow(p) {
-  const err = PN().pluginErrors()[p.id], lang = p.lang === 'py' ? 'Python' : 'JavaScript';
+  const err = PN().pluginErrors()[p.id], lang = p.lang === 'py' ? 'Python' : 'JavaScript', edit = can('CAN_MANAGE_PLUGINS');
   return '<div class="pl-row" data-on="' + (p.on ? 1 : 0) + '" data-id="' + esc(p.id) + '"><div class="pl-main"><b>' + esc(p.id) + '</b><span>' + esc(p.builtin ? T('pd.' + p.id) : T('p.custom.d', { lang })) + '</span>' +
-    '<div class="pl-meta"><span class="pill">' + esc(T(p.cat)) + '</span><span class="pill">v' + esc(p.ver) + '</span><span class="pill">' + p.lat + ' ' + esc(T('u.ms')) + '</span>' + (p.builtin ? '' : '<span class="pill pill-acc">' + (p.lang === 'py' ? 'PY' : 'JS') + '</span>') + (err ? '<span class="pill pill-err">' + esc(err) + '</span>' : '') + '</div></div>' +
-    '<div class="pl-ctl"><button type="button" class="btn btn-ghost btn-sm btn-ic" data-pl-cfg="' + esc(p.id) + '" aria-label="' + esc(T('p.cfg')) + '" title="' + esc(T('p.cfg')) + '">' + ico('gear') + '</button>' +
-    (p.builtin ? '' : '<button type="button" class="btn btn-ghost btn-sm btn-ic" data-pl-del="' + esc(p.id) + '" aria-label="' + esc(T('p.del')) + '" title="' + esc(T('p.del')) + '">' + ico('x') + '</button>') +
-    '<label class="sw"><input type="checkbox" data-pl-on="' + esc(p.id) + '"' + (p.on ? ' checked' : '') + ' aria-label="' + esc(p.id) + '"><i></i></label></div></div>';
+    '<div class="pl-meta"><span class="pill">' + esc(T(p.cat)) + '</span><span class="pill">v' + esc(p.ver) + '</span><span class="pill">' + p.lat + ' ' + esc(T('u.ms')) + '</span>' + (p.builtin ? '' : '<span class="pill pill-acc">' + (p.lang === 'py' ? 'PY' : 'JS') + '</span>') + (!p.builtin && p.lang === 'py' ? '<span class="pill">' + esc(T('p.py.wait')) + '</span>' : '') + (err ? '<span class="pill pill-err">' + esc(err) + '</span>' : '') + '</div></div>' +
+    '<div class="pl-ctl">' + (edit ? '<button type="button" class="btn btn-ghost btn-sm btn-ic" data-pl-cfg="' + esc(p.id) + '" aria-label="' + esc(T('p.cfg')) + '" title="' + esc(T('p.cfg')) + '">' + ico('gear') + '</button>' : '') +
+    (p.builtin || !edit ? '' : '<button type="button" class="btn btn-ghost btn-sm btn-ic" data-pl-del="' + esc(p.id) + '" aria-label="' + esc(T('p.del')) + '" title="' + esc(T('p.del')) + '">' + ico('x') + '</button>') +
+    '<label class="sw"><input type="checkbox" data-pl-on="' + esc(p.id) + '"' + (p.on ? ' checked' : '') + (edit ? '' : ' disabled') + ' aria-label="' + esc(p.id) + '"><i></i></label></div></div>';
 }
 function renderPlugins() {
   const box = $('plugList'); if (!box) return; const L = ST().plugins.list();
   box.innerHTML = L.map(plugRow).join(''); setT($('plCount'), T('p.count', { n: L.length, a: L.filter(p => p.on).length })); setT($('cPlug'), String(L.length)); states('plugins'); $('view-plugins').dataset.state = 'ok';
+  const add = $('btnAddPlugin'); if (add) add.hidden = !can('CAN_MANAGE_PLUGINS');                                 // без права CAN_MANAGE_PLUGINS кнопок правки нет в видимой части
 }
-let PE = null;
-function openPluginEditor(id) {
-  const p = id ? ST().plugins.get(id) : null; if (id && !p) return; PE = { id: id || null, p };
-  const isNew = !p, bi = !!(p && p.builtin);
-  $('plTitle').textContent = T(isNew ? 'p.new' : 'p.edit'); $('plSub').textContent = isNew ? '' : p.id; $('plNameF').hidden = !isNew; $('plLangF').hidden = !isNew; $('plCodeF').hidden = bi; $('plNote').hidden = false; $('plErr').textContent = '';
-  $('plName').value = isNew ? '' : p.id; $('plLang').value = p ? p.lang : 'js'; $('plParams').value = JSON.stringify(p ? p.params : { threshold: 85, enabled: true }, null, 2);
-  $('plCode').value = p && !bi ? p.code : T('p.code.tpl'); noteFor(bi ? 'cfg' : (p ? p.lang : 'js'));
-  if (g.AppShell) g.AppShell.openWnd('mPlugin', isNew ? $('plName') : $('plParams'));
-}
-function noteFor(l) { const sp = $('plNote').querySelector('span'), k = l === 'py' ? 'p.note.py' : l === 'cfg' ? 'p.note.cfg' : 'p.note.js'; sp.setAttribute('data-i18n', k); sp.textContent = T(k); }
-function savePlugin() {
-  const err = m => { $('plErr').textContent = m; }; if (!PE) return;
-  if (!can('CAN_MANAGE_PLUGINS')) return err(T('perm.denied', { perm: 'CAN_MANAGE_PLUGINS' }));
-  let params; try { params = JSON.parse($('plParams').value.trim() || '{}'); if (!params || typeof params !== 'object' || Array.isArray(params)) throw new Error('obj'); } catch (e) { return err(T('p.err.json')); }
-  const bi = !!(PE.p && PE.p.builtin), lang = PE.p ? PE.p.lang : $('plLang').value, code = $('plCode').value;
-  if (!bi && lang === 'js') { try { new Function('plugin', '"use strict";\n' + code); } catch (e) { return err(T('p.err.js', { m: e.message })); } }
-  if (!PE.p) {
-    const id = $('plName').value.trim(), r = ST().plugins.add({ id, lang, code, params });
-    if (!r.ok) return err(T(r.reason === 'DUP' ? 'p.err.dup' : 'p.err.id'));
-    ST().log({ cat: 'PLUGIN', k: 'ev.plugin.add', p: { id }, node: id, old: '', nw: 'ON' }); toast('ok', T('p.added'), id);
-  } else {
-    const p = PE.p, oldParams = JSON.parse(JSON.stringify(p.params || {})), oldCode = p.code;
-    if (!bi) p.code = code; ST().plugins.setParams(p.id, params);
-    const ch = JSON.stringify(oldParams) !== JSON.stringify(params);
-    ST().log({ cat: 'PLUGIN', k: 'ev.plugin.params', p: { id: p.id }, node: p.id, old: JSON.stringify(oldParams), nw: JSON.stringify(params), undo: ch ? { kind: 'pluginParams', data: { id: p.id, params: oldParams } } : null });
-    toast('ok', T('p.saved'), p.id); void oldCode;
-  }
-  g.AppShell.closeWnd('mPlugin'); renderPlugins();
-}
+const openPluginEditor = id => { if (g.PluginUI) g.PluginUI.open(id || null); };
+
 function togglePlugin(id, on, input) {
   if (!can('CAN_MANAGE_PLUGINS')) { input.checked = !on; return toast('err', T('perm.t'), T('perm.denied', { perm: 'CAN_MANAGE_PLUGINS' })); }
   const r = ST().plugins.setOn(id, on); if (!r) return;
@@ -383,7 +374,7 @@ function bridge() {
   const on = (n, f) => g.addEventListener(n, e => f(e.detail || {}));
   const L = e => ST().log(e), S = () => PN().state();
   on('abai:auth', d => {
-    if (d.type === 'login') L({ cat: 'AUTH', k: 'ev.login', node: '', old: '', nw: d.via || 'password', userObj: d.user });
+    if (d.type === 'login') { if (!d.restored) L({ cat: 'AUTH', k: 'ev.login', node: '', old: '', nw: d.via || 'password', userObj: d.user }); }   // восстановление после F5 — не новый вход
     else if (d.type === 'logout') L({ cat: 'AUTH', k: 'ev.logout', node: '', old: '', nw: '', userObj: d.user });
   });
   on('abai:pwdrequest', r => L({ cat: 'PWD_RESET', k: 'ev.pwd.req', p: { id: r.id }, node: r.id, old: '', nw: 'PENDING', userObj: DB().byId(r.userId) }));
@@ -410,6 +401,13 @@ function bridge() {
   });
   on('abai:plugin-alarm', d => L({ sys: true, cat: 'PLUGIN', k: 'ev.plugin.alarm', p: { id: d.id }, node: d.id, old: '', nw: d.note || 'ALARM' }));
   on('abai:plugin-error', d => { L({ sys: true, cat: 'PLUGIN', k: 'ev.plugin.error', p: { id: d.id }, node: d.id, old: '', nw: String(d.message).slice(0, 80) }); renderPlugins(); });
+  on('abai:source', d => {
+    if (d.source === 'hw') { const i = g.HardwareLink ? g.HardwareLink.info() : {}; L({ sys: true, cat: 'PINN', k: 'ev.hw.on', p: { src: (i.kind === 'ws' ? i.url : i.label) || 'hw' }, node: 'HARDWARE', old: String(d.prev || '').toUpperCase(), nw: 'ONLINE' }); }
+    else if (d.prev === 'hw') L({ sys: true, cat: 'PINN', k: 'ev.hw.off', node: 'HARDWARE', old: 'ONLINE', nw: d.source === 'sim' ? 'SIM' : 'OFFLINE' });
+    if (PN().isRunning()) { applyGridFilter(); updateCards(0, true); onSim(S()); }
+  });
+  on('abai:cmdfail', d => toast('err', T('act.fail'), T('act.sendfail', { name: d.name })));
+  on('abai:session', d => { if (d.state === 'refresh') { renderPlugins(); if (insp) renderActs(); } });
   on('abai:sim', () => { /* значения обновляет onSim через опрос ниже */ });
   on('abai:audit', () => { setT($('cAudit'), String(ST().audit.count())); if (view === 'audit') { fillAuditUsers(); renderAudit(); } });
   on('abai:thresholds', () => { updateCards(0, true); if (insp) updateInspector(S(), true); });
@@ -463,7 +461,6 @@ function init() {
   on('btnAddPlugin', 'click', () => { if (!can('CAN_MANAGE_PLUGINS')) return toast('err', T('perm.t'), T('perm.denied', { perm: 'CAN_MANAGE_PLUGINS' })); openPluginEditor(null); });
   on('plugList', 'change', e => { const i = e.target.closest('[data-pl-on]'); if (i) togglePlugin(i.dataset.plOn, i.checked, i); });
   on('plugList', 'click', e => { const c = e.target.closest('[data-pl-cfg]'); if (c) return openPluginEditor(c.dataset.plCfg); const d = e.target.closest('[data-pl-del]'); if (d) deletePlugin(d.dataset.plDel); });
-  on('plSave', 'click', savePlugin); on('plLang', 'change', e => { noteFor(e.target.value); });
   /* тревоги */
   on('alarmAck', 'click', () => { if (!can('CAN_SWITCH_RELAY')) return toast('err', T('perm.t'), T('perm.denied', { perm: 'CAN_SWITCH_RELAY' })); ackAlarm(); });
   g.addEventListener('abai:sim', e => onSim(e.detail));
